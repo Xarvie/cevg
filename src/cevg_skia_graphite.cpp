@@ -155,8 +155,8 @@ static bool g_cevg_cpu_mode = false;
 struct CevgSwapchain;  /* defined in the swapchain section */
 #endif
 
-static sk_sp<SkImage>   EnsureGraphiteImage(CevgImage* image, CevgContext* ctx);
-static sk_sp<SkImage>   EnsureGraphiteImageRec(CevgImage* image, graphite::Recorder* rec);
+static sk_sp<SkImage>   EnsureGraphiteImage(const CevgImage* image, CevgContext* ctx);
+static sk_sp<SkImage>   EnsureGraphiteImageRec(const CevgImage* image, graphite::Recorder* rec);
 static sk_sp<SkFontMgr> cevg_make_fontmgr();
 static sk_sp<SkFontMgr> cevg_shared_fontmgr();
 static void             cevg_context_register_recorder(CevgContext* ctx,
@@ -411,17 +411,17 @@ struct CevgTextBlob_ {
 
 struct CevgImage_ {
     sk_sp<SkImage> image;       /* CPU-decoded source (immutable after create) */
-    sk_sp<SkImage> gpu_image;   /* cached Graphite-backed copy (write-once) */
+    mutable sk_sp<SkImage> gpu_image;   /* cached Graphite-backed copy (write-once) */
     int width;
     int height;
-    std::mutex gpu_upload_mutex; /* guards the one-time gpu_image upload from
+    mutable std::mutex gpu_upload_mutex; /* guards the one-time gpu_image upload from
                                   * racing worker threads that draw the same image */
     /* Release/acquire gate for the lock-free fast path. gpu_image is written
      * exactly once (under the mutex) and then never mutated; gpu_ready is set
      * with release AFTER that write, and the fast-path read acquire-loads it.
      * This makes the unlocked read+copy of gpu_image safe — without it, the
      * fast path raced with the (non-atomic) sk_sp assignment under the lock. */
-    std::atomic<bool> gpu_ready{false};
+    mutable std::atomic<bool> gpu_ready{false};
     /* Reference count. Starts at 1 (the creator's handle, released by the
      * public cevg_image_destroy). A CevgPaint that installs this image as a
      * shader holds an additional reference, so destroying the caller's handle
@@ -748,7 +748,7 @@ static uint32_t cevg_find_mem_type(CevgContext* ctx, uint32_t typeBits,
         if ((typeBits & (1u << i)) &&
             (mp.memoryTypes[i].propertyFlags & props) == props) return i;
     }
-    return 0;
+    return UINT32_MAX;  /* no suitable memory type found */
 }
 
 static VkPresentModeKHR cevg_pick_present_mode(CevgContext* ctx, VkSurfaceKHR surf,
@@ -860,6 +860,7 @@ static bool cevg_swapchain_build(CevgSwapchain* sc, int w, int h) {
     ai.allocationSize = req.size;
     ai.memoryTypeIndex = cevg_find_mem_type(ctx, req.memoryTypeBits,
                                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (ai.memoryTypeIndex == UINT32_MAX) return false;
     if (ctx->vk.AllocateMemory(ctx->device, &ai, nullptr, &sc->renderMemory) != VK_SUCCESS) return false;
     ctx->vk.BindImageMemory(ctx->device, sc->renderImage, sc->renderMemory, 0);
 
@@ -1759,7 +1760,7 @@ extern "C" void cevg_recording_destroy(CevgRecording* recording) {
  * recorder. Once created, a Graphite SkImage is shareable across recorders
  * of the same Context, so the cache is valid for all subsequent draws.
  * =================================================================== */
-static sk_sp<SkImage> EnsureGraphiteImageRec(CevgImage* image, graphite::Recorder* rec) {
+static sk_sp<SkImage> EnsureGraphiteImageRec(const CevgImage* image, graphite::Recorder* rec) {
     if (!image || !image->image) return nullptr;
     /* Fast path: already uploaded. gpu_ready is acquire-loaded; once it reads
      * true, gpu_image was fully published (release store below) and is never
@@ -1783,7 +1784,7 @@ static sk_sp<SkImage> EnsureGraphiteImageRec(CevgImage* image, graphite::Recorde
 /* Convenience overload used where only a CevgContext is on hand (the default
  * recorder is the right target there — these call sites run on the GPU
  * thread). */
-static sk_sp<SkImage> EnsureGraphiteImage(CevgImage* image, CevgContext* ctx) {
+static sk_sp<SkImage> EnsureGraphiteImage(const CevgImage* image, CevgContext* ctx) {
     return EnsureGraphiteImageRec(image, ctx && ctx->recorder ? ctx->recorder.get() : nullptr);
 }
 
@@ -2347,7 +2348,7 @@ extern "C" void cevg_canvas_draw_image(CevgCanvas* c, const CevgImage* image, fl
     if (!c || !c->canvas || !image) return;
     CevgContext* ctx = cevg_ctx_of(c);
     graphite::Recorder* rec = c->surface ? c->surface->ownerRecorder : nullptr;
-    sk_sp<SkImage> img = EnsureGraphiteImageRec(const_cast<CevgImage*>(image), rec);
+    sk_sp<SkImage> img = EnsureGraphiteImageRec(image, rec);
     if (!img) return;
     SkPaint p = CevgPaintToSkPaint(paint, ctx);
     SkSamplingOptions samp = ToSkSampling(paint ? paint->filter_quality : kCevgFilterQuality_Linear);
@@ -2358,7 +2359,7 @@ extern "C" void cevg_canvas_draw_image_rect(CevgCanvas* c, const CevgImage* imag
     if (!c || !c->canvas || !image || !src_rect || !dst_rect) return;
     CevgContext* ctx = cevg_ctx_of(c);
     graphite::Recorder* rec = c->surface ? c->surface->ownerRecorder : nullptr;
-    sk_sp<SkImage> img = EnsureGraphiteImageRec(const_cast<CevgImage*>(image), rec);
+    sk_sp<SkImage> img = EnsureGraphiteImageRec(image, rec);
     if (!img) return;
     SkPaint p = CevgPaintToSkPaint(paint, ctx);
     SkRect src = SkRect::MakeXYWH(src_rect[0], src_rect[1], src_rect[2], src_rect[3]);
@@ -2371,7 +2372,7 @@ extern "C" void cevg_canvas_draw_image_nine(CevgCanvas* c, const CevgImage* imag
     if (!c || !c->canvas || !image || !center || !dst) return;
     CevgContext* ctx = cevg_ctx_of(c);
     graphite::Recorder* rec = c->surface ? c->surface->ownerRecorder : nullptr;
-    sk_sp<SkImage> img = EnsureGraphiteImageRec(const_cast<CevgImage*>(image), rec);
+    sk_sp<SkImage> img = EnsureGraphiteImageRec(image, rec);
     if (!img) return;
     SkPaint p = CevgPaintToSkPaint(paint, ctx);
     SkSamplingOptions samp = ToSkSampling(paint ? paint->filter_quality
@@ -2623,14 +2624,20 @@ class CevgRunHandler : public SkShaper::RunHandler {
     std::vector<SkGlyphID*> fGlyphAllocs;   /* to free in destructor */
     std::vector<SkPoint*>   fPosAllocs;
     std::vector<uint32_t*>  fClusterAllocs;
+    /* Also build a native SkTextBlob in the same pass, eliminating the
+     * need for a second shaping pass. */
+    SkTextBlobBuilderRunHandler fBlobHandler;
 public:
     CevgRunHandler(const char* text, size_t len, CevgShaperResult* result)
-        : fText(text), fTextLen(len), fResult(result), fGlyphOffset(0) {}
+        : fText(text), fTextLen(len), fResult(result), fGlyphOffset(0),
+          fBlobHandler(text, {0, 0}) {}
     ~CevgRunHandler() {
         for (auto* p : fGlyphAllocs)    delete[] p;
         for (auto* p : fPosAllocs)      delete[] p;
         for (auto* p : fClusterAllocs)  delete[] p;
     }
+
+    sk_sp<SkTextBlob> makeBlob() { return fBlobHandler.makeBlob(); }
 
 private:
     void commitRunBuffer(const RunInfo& info) override {
@@ -2652,6 +2659,10 @@ private:
 
         fResult->runs.push_back(run);
         fGlyphOffset += info.glyphCount;
+
+        /* Forward to the blob handler so it builds the native SkTextBlob
+         * in the same pass — no second shaping needed. */
+        fBlobHandler.commitRunBuffer(info);
     }
 
     Buffer runBuffer(const RunInfo& info) override {
@@ -2668,13 +2679,19 @@ private:
         buf.clusters  = clusters;
         buf.point     = {0, 0};
         fCurrentBuffer = buf;
+
+        /* Also let the blob handler allocate its own buffer so it can
+         * build the SkTextBlob. We must call runBuffer on the blob handler
+         * BEFORE returning, but we use OUR buffer for metadata collection. */
+        fBlobHandler.runBuffer(info);
+
         return buf;
     }
 
-    void commitRunInfo() override {}
-    void beginLine() override {}
-    void commitLine() override {}
-    void runInfo(const RunInfo&) override {}
+    void commitRunInfo() override { fBlobHandler.commitRunInfo(); }
+    void beginLine() override { fBlobHandler.beginLine(); }
+    void commitLine() override { fBlobHandler.commitLine(); }
+    void runInfo(const RunInfo& info) override { fBlobHandler.runInfo(info); }
 };
 
 /* Shape text and fill a CevgShaperResult with full metadata. */
@@ -2725,21 +2742,9 @@ static bool cevg_shape_text(const char* text, size_t len,
                      &handler);
     }
 
-    /* Also build a native SkTextBlob for efficient drawing. */
-    SkTextBlobBuilderRunHandler blobHandler(txt.c_str(), {0, 0});
-    if (bidiIter && scriptIter && fontIter) {
-        /* Re-shape for the blob (iterators are single-use). */
-        auto bidiIter2 = SkShaper::MakeBiDiRunIterator(txt.c_str(), txt.size(), leftToRight ? 0 : 1);
-        auto scriptIter2 = SkShaper::MakeScriptRunIterator(txt.c_str(), txt.size(), SkSetFourByteTag(0, 0, 0, 0));
-        auto fontIter2 = SkShaper::MakeFontMgrRunIterator(txt.c_str(), txt.size(), font, fontMgr);
-        if (bidiIter2 && scriptIter2 && fontIter2) {
-            SkShaper::TrivialLanguageRunIterator langIter2("en", txt.size());
-            shaper->shape(txt.c_str(), txt.size(),
-                         *fontIter2, *bidiIter2, *scriptIter2, langIter2,
-                         nullptr, 0, SK_ScalarMax, &blobHandler);
-        }
-    }
-    result->nativeBlob = blobHandler.makeBlob();
+    /* The native SkTextBlob was built in the same pass by the handler's
+     * internal SkTextBlobBuilderRunHandler — no second shaping needed. */
+    result->nativeBlob = handler.makeBlob();
 
     /* Compute typographic metrics. */
     SkFontMetrics fm;
@@ -2792,13 +2797,15 @@ static CevgTextBlob* cevg_blob_from_result(CevgShaperResult* result, float fontS
     blob->font_size = fontSize;
     blob->para_dir  = paraDir;
 
-    /* Compute per-glyph advances from position differences. */
+    /* Compute per-glyph advances from position differences.
+     * Use fabs() so RTL runs (where positions decrease left-to-right)
+     * still produce positive advance values. */
     blob->advances = (float*)calloc(totalGlyphs, sizeof(float));
     if (blob->advances) {
         for (int i = 0; i < totalGlyphs; i++) {
             blob->advances[i] = (i + 1 < totalGlyphs)
-                ? blob->positions_x[i + 1] - blob->positions_x[i]
-                : blob->width - blob->positions_x[i];
+                ? fabsf(blob->positions_x[i + 1] - blob->positions_x[i])
+                : fabsf(blob->width - blob->positions_x[i]);
         }
     }
 
@@ -3010,14 +3017,14 @@ extern "C" void cevg_text_blob_get_cluster_info(const CevgTextBlob* blob,
 
 extern "C" int cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y) {
     if (!blob) return -1;
-    (void)y;
     if (blob->glyph_count == 0) return -1;
 
     float best_dist = 1e10f;
     int best_idx = -1;
     for (int i = 0; i < blob->glyph_count; i++) {
         float dx = x - blob->positions_x[i];
-        float dist = dx * dx;
+        float dy = y - blob->positions_y[i];
+        float dist = dx * dx + dy * dy;
         if (dist < best_dist) {
             best_dist = dist;
             best_idx = i;
@@ -3039,8 +3046,8 @@ extern "C" void cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, floa
     } else {
         for (int i = 0; i < blob->glyph_count; i++) {
             out[i] = (i + 1 < blob->glyph_count)
-                     ? blob->positions_x[i + 1] - blob->positions_x[i]
-                     : blob->width - blob->positions_x[i];
+                     ? fabsf(blob->positions_x[i + 1] - blob->positions_x[i])
+                     : fabsf(blob->width - blob->positions_x[i]);
         }
     }
 }

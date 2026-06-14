@@ -42,15 +42,37 @@
 extern "C" {
 #endif
 
-/* ---- Export macros ---- */
-#if defined(_WIN32) && defined(CEVG_SHARED)
+/* ---- Export macros ----
+ *
+ * Five-platform export: Windows (MSVC + MinGW), Linux, macOS, iOS, Android.
+ *
+ *   CEVG_STATIC  — building or consuming a static library (no export)
+ *   CEVG_EXPORTS — building the shared library (dllexport / visibility default)
+ *   neither      — consuming the shared library (dllimport on Windows, nothing on ELF/Mach-O)
+ *
+ * On Windows (MSVC and MinGW) the PE format uses __declspec; on every
+ * other platform (ELF / Mach-O) we compile with -fvisibility=hidden and
+ * __attribute__((visibility("default"))) marks the public symbols. */
+#if defined(CEVG_STATIC)
+    /* Static library: no import/export annotations on any platform */
+    #define CEVG_API
+#elif defined(_WIN32) || defined(__CYGWIN__)
+    /* Windows DLL (MSVC + MinGW): dllexport when building, dllimport when consuming */
     #ifdef CEVG_EXPORTS
         #define CEVG_API __declspec(dllexport)
     #else
         #define CEVG_API __declspec(dllimport)
     #endif
 #else
-    #define CEVG_API
+    /* Linux / macOS / iOS / Android / Emscripten:
+     * __attribute__((visibility("default"))) marks a symbol for export
+     * when compiled with -fvisibility=hidden.  Consumers don't need
+     * the attribute — they see the exported symbol via the SO/dylib. */
+    #ifdef CEVG_EXPORTS
+        #define CEVG_API __attribute__((visibility("default")))
+    #else
+        #define CEVG_API
+    #endif
 #endif
 
 /* ---- Opaque handles ----

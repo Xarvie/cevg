@@ -47,9 +47,10 @@ add_subdirectory(third/skia)
 # ===================================================================
 if(CEVG_SHARED)
     add_library(cevg SHARED)
-    target_compile_definitions(cevg PRIVATE CEVG_EXPORTS PUBLIC CEVG_SHARED)
+    target_compile_definitions(cevg PRIVATE CEVG_EXPORTS)
 else()
     add_library(cevg STATIC)
+    target_compile_definitions(cevg PUBLIC CEVG_STATIC)
 endif()
 
 set_target_properties(cevg PROPERTIES PREFIX "")
@@ -73,6 +74,13 @@ target_include_directories(cevg_common PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/common"
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
+# cevg_common.c includes cevg.h which uses CEVG_API; when building the
+# library (shared or static) the definitions must match the main target.
+if(CEVG_SHARED)
+    target_compile_definitions(cevg_common PRIVATE CEVG_EXPORTS)
+else()
+    target_compile_definitions(cevg_common PUBLIC CEVG_STATIC)
+endif()
 set_target_properties(cevg_common PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED ON
@@ -85,153 +93,6 @@ target_sources(cevg PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/cevg_skia_graphite.cpp"
     $<TARGET_OBJECTS:cevg_common>
 )
-if(MSVC AND CEVG_SHARED)
-    # Generate .def file dynamically so VK symbols are only included when CEVG_VULKAN=ON
-    set(CEVG_DEF_SYMBOLS
-        cevg_gpu_device_create_cpu
-        cevg_gpu_device_create_auto
-        cevg_gpu_device_destroy
-        cevg_version
-        cevg_backend_name
-        cevg_context_create
-        cevg_context_destroy
-        cevg_context_reset
-        cevg_context_tick
-        cevg_context_get_vram_used
-        cevg_context_get_vram_budget
-        cevg_recorder_create
-        cevg_recorder_destroy
-        cevg_context_default_recorder
-        cevg_recorder_snap
-        cevg_context_insert_recording
-        cevg_recording_destroy
-        cevg_surface_create
-        cevg_surface_create_with_recorder
-        cevg_surface_create_for_buffer
-        cevg_surface_resize
-        cevg_surface_destroy
-        cevg_surface_get_width
-        cevg_surface_get_height
-        cevg_surface_read_pixels
-        cevg_surface_present
-        cevg_surface_add_dirty_rect
-        cevg_canvas_create
-        cevg_canvas_create_with_recorder
-        cevg_canvas_destroy
-        cevg_canvas_save
-        cevg_canvas_restore
-        cevg_canvas_get_save_count
-        cevg_canvas_translate
-        cevg_canvas_scale
-        cevg_canvas_rotate
-        cevg_canvas_skew
-        cevg_canvas_concat
-        cevg_canvas_reset_matrix
-        cevg_canvas_get_transform
-        cevg_canvas_clip_rect
-        cevg_canvas_clip_path
-        cevg_canvas_get_clip_bounds
-        cevg_canvas_clear
-        cevg_canvas_save_layer
-        cevg_canvas_restore_layer
-        cevg_canvas_draw_paint
-        cevg_canvas_draw_rect
-        cevg_canvas_draw_round_rect
-        cevg_canvas_draw_circle
-        cevg_canvas_draw_oval
-        cevg_canvas_draw_line
-        cevg_canvas_draw_path
-        cevg_canvas_draw_image
-        cevg_canvas_draw_image_rect
-        cevg_canvas_draw_image_nine
-        cevg_canvas_draw_text_blob
-        cevg_canvas_draw_surface
-        cevg_canvas_flush
-        cevg_display_list_record_begin
-        cevg_display_list_record_end
-        cevg_display_list_destroy
-        cevg_canvas_draw_display_list
-        cevg_path_create
-        cevg_path_destroy
-        cevg_path_rewind
-        cevg_path_move_to
-        cevg_path_line_to
-        cevg_path_quad_to
-        cevg_path_cubic_to
-        cevg_path_close
-        cevg_path_set_fill_rule
-        cevg_path_get_fill_rule
-        cevg_path_get_bounds
-        cevg_paint_create
-        cevg_paint_destroy
-        cevg_paint_reset
-        cevg_paint_set_color
-        cevg_paint_set_color_argb
-        cevg_paint_set_style
-        cevg_paint_set_alpha
-        cevg_paint_set_anti_alias
-        cevg_paint_set_blend_mode
-        cevg_paint_set_stroke_width
-        cevg_paint_set_stroke_cap
-        cevg_paint_set_stroke_join
-        cevg_paint_set_stroke_miter
-        cevg_paint_set_dash
-        cevg_paint_clear_dash
-        cevg_paint_set_linear_gradient
-        cevg_paint_set_radial_gradient
-        cevg_paint_clear_shader
-        cevg_paint_set_image_shader
-        cevg_paint_set_blur
-        cevg_paint_set_drop_shadow
-        cevg_paint_set_color_matrix
-        cevg_paint_set_filter_quality
-        cevg_paint_clear_filter
-        cevg_paint_set_backdrop_blur
-        cevg_paint_set_backdrop_shadow
-        cevg_paint_clear_backdrop
-        cevg_typeface_create_from_file
-        cevg_typeface_create_from_data
-        cevg_typeface_ref
-        cevg_typeface_unref
-        cevg_typeface_get_metrics
-        cevg_text_blob_make
-        cevg_text_blob_make_ex
-        cevg_text_blob_destroy
-        cevg_text_blob_get_width
-        cevg_text_blob_get_height
-        cevg_text_blob_get_glyph_count
-        cevg_text_blob_get_glyph_positions
-        cevg_text_blob_get_cluster_info
-        cevg_text_blob_hit_test
-        cevg_text_blob_get_glyph_advances
-        cevg_text_blob_get_run_count
-        cevg_text_blob_get_runs
-        cevg_text_find_line_breaks
-        cevg_image_create_from_file
-        cevg_image_create_from_memory
-        cevg_image_create_from_pixels
-        cevg_image_destroy
-        cevg_image_get_width
-        cevg_image_get_height
-    )
-    if(CEVG_VULKAN)
-        list(APPEND CEVG_DEF_SYMBOLS
-            cevg_gpu_device_create_vulkan
-            cevg_surface_create_for_vk_surface
-            cevg_gpu_profiler_enable
-            cevg_gpu_profiler_begin_frame
-            cevg_gpu_profiler_end_frame
-            cevg_gpu_profiler_get_frame_time
-        )
-    endif()
-    # Write the .def file into the build directory
-    set(CEVG_DEF_PATH "${CMAKE_CURRENT_BINARY_DIR}/cevg.def")
-    file(WRITE "${CEVG_DEF_PATH}" "LIBRARY cevg\nEXPORTS\n")
-    foreach(_sym ${CEVG_DEF_SYMBOLS})
-        file(APPEND "${CEVG_DEF_PATH}" "    ${_sym}\n")
-    endforeach()
-    target_sources(cevg PRIVATE "${CEVG_DEF_PATH}")
-endif()
 
 # ---- Link Skia (built from source) ----
 # Use PRIVATE so Skia's PUBLIC includes (ICU C++ headers etc.) don't
@@ -240,6 +101,19 @@ endif()
 target_link_libraries(cevg PRIVATE skia)
 
 # Vulkan symbols are loaded at runtime by glad2 — no vulkan-1.lib needed.
+
+# ---- Symbol visibility ----
+# Hide all symbols by default; only CEVG_API-marked symbols are exported.
+# This mirrors Windows DLL behavior on Linux/macOS/iOS/Android.
+# Not applied on Windows (MSVC + MinGW) where __declspec controls PE export.
+set_target_properties(cevg PROPERTIES
+    C_VISIBILITY_PRESET hidden
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
+if(NOT WIN32)
+    target_compile_options(cevg PRIVATE -fvisibility=hidden)
+endif()
 
 # ---- Unified output directories ----
 # All binaries (DLL, EXE) go to the same directory so DLLs are always
