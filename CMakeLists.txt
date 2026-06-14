@@ -27,6 +27,11 @@ endif()
 option(CEVG_SHARED "Build cevg as a shared library (DLL)" OFF)
 option(CEVG_VULKAN "Enable Vulkan GPU backend (loaded at runtime via glad2)" ON)
 
+# ---- Position-Independent Code (required when linking static libs into .so) ----
+if(CEVG_SHARED)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 # ---- glad2: runtime Vulkan loader (no Vulkan SDK needed) ----
 if(CEVG_VULKAN)
     add_library(cevg_glad STATIC "${CMAKE_CURRENT_SOURCE_DIR}/third/glad/src/vulkan.c")
@@ -84,6 +89,7 @@ endif()
 set_target_properties(cevg_common PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED ON
+    POSITION_INDEPENDENT_CODE ON
 )
 if(MSVC)
     target_compile_options(cevg_common PRIVATE /experimental:c11atomics)
@@ -104,8 +110,9 @@ target_link_libraries(cevg PRIVATE skia)
 
 # ---- Symbol visibility ----
 # Hide all symbols by default; only CEVG_API-marked symbols are exported.
-# This mirrors Windows DLL behavior on Linux/macOS/iOS/Android.
-# Not applied on Windows (MSVC + MinGW) where __declspec controls PE export.
+# Windows: __declspec(dllexport) auto-handles PE export, no extra steps.
+# Linux/Android: -fvisibility=hidden + --version-script
+# macOS/iOS: -fvisibility=hidden + -exported_symbols_list
 set_target_properties(cevg PROPERTIES
     C_VISIBILITY_PRESET hidden
     CXX_VISIBILITY_PRESET hidden
@@ -113,6 +120,16 @@ set_target_properties(cevg PROPERTIES
 )
 if(NOT WIN32)
     target_compile_options(cevg PRIVATE -fvisibility=hidden)
+    if(CEVG_SHARED)
+        if(APPLE)
+            # macOS/iOS: export symbol list
+            set(CEVG_EXPORTED_SYMBOLS "${CMAKE_CURRENT_SOURCE_DIR}/cevg.exported_symbols")
+            target_link_options(cevg PRIVATE -exported_symbols_list "${CEVG_EXPORTED_SYMBOLS}")
+        else()
+            # Linux/Android: GNU ld version script
+            target_link_options(cevg PRIVATE "SHELL:-Wl,--version-script ${CMAKE_CURRENT_SOURCE_DIR}/cevg.version")
+        endif()
+    endif()
 endif()
 
 # ---- Unified output directories ----
@@ -139,6 +156,11 @@ set_target_properties(cevg PROPERTIES
 # MSVC needs /experimental:c11atomics for C11 <stdatomic.h> support.
 if(MSVC)
     target_compile_options(cevg PRIVATE /experimental:c11atomics)
+endif()
+
+# ---- Static C++ runtime (ABI isolation: no libstdc++/libgcc dependency) ----
+if(CEVG_SHARED AND NOT WIN32 AND NOT APPLE)
+    target_link_options(cevg PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 # ---- Warnings (browser-grade hygiene) ----

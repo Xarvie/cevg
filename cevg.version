@@ -1,0 +1,6 @@
+{
+    global:
+        cevg_*;
+    local:
+        *;
+};
