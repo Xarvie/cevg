@@ -2622,9 +2622,6 @@ class CevgRunHandler : public SkShaper::RunHandler {
     CevgShaperResult*  fResult;
     int                fGlyphOffset;  /* running glyph count across runs */
     SkShaper::RunHandler::Buffer fCurrentBuffer;  /* buffer from runBuffer() */
-    std::vector<SkGlyphID*> fGlyphAllocs;   /* to free in destructor */
-    std::vector<SkPoint*>   fPosAllocs;
-    std::vector<uint32_t*>  fClusterAllocs;
     /* Also build a native SkTextBlob in the same pass, eliminating the
      * need for a second shaping pass. */
     SkTextBlobBuilderRunHandler fBlobHandler;
@@ -2632,11 +2629,6 @@ public:
     CevgRunHandler(const char* text, size_t len, CevgShaperResult* result)
         : fText(text), fTextLen(len), fResult(result), fGlyphOffset(0),
           fBlobHandler(text, {0, 0}) {}
-    ~CevgRunHandler() {
-        for (auto* p : fGlyphAllocs)    delete[] p;
-        for (auto* p : fPosAllocs)      delete[] p;
-        for (auto* p : fClusterAllocs)  delete[] p;
-    }
 
     sk_sp<SkTextBlob> makeBlob() { return fBlobHandler.makeBlob(); }
 
@@ -2661,31 +2653,17 @@ private:
         fResult->runs.push_back(run);
         fGlyphOffset += info.glyphCount;
 
-        /* Forward to the blob handler so it builds the native SkTextBlob
-         * in the same pass — no second shaping needed. */
+        /* Forward to the blob handler so it finalizes the native SkTextBlob. */
         fBlobHandler.commitRunBuffer(info);
     }
 
     Buffer runBuffer(const RunInfo& info) override {
-        Buffer buf;
-        auto* glyphs   = new SkGlyphID[info.glyphCount];
-        auto* positions = new SkPoint[info.glyphCount];
-        auto* clusters  = new uint32_t[info.glyphCount];
-        fGlyphAllocs.push_back(glyphs);
-        fPosAllocs.push_back(positions);
-        fClusterAllocs.push_back(clusters);
-        buf.glyphs    = glyphs;
-        buf.positions = positions;
-        buf.offsets   = nullptr;
-        buf.clusters  = clusters;
-        buf.point     = {0, 0};
+        /* Use the blob handler's buffer directly — the shaper writes into it,
+         * and the blob handler builds the SkTextBlob from the same data.
+         * We save a copy of the buffer pointer so commitRunBuffer can read
+         * the filled-in glyphs/positions for our metadata collection. */
+        Buffer buf = fBlobHandler.runBuffer(info);
         fCurrentBuffer = buf;
-
-        /* Also let the blob handler allocate its own buffer so it can
-         * build the SkTextBlob. We must call runBuffer on the blob handler
-         * BEFORE returning, but we use OUR buffer for metadata collection. */
-        fBlobHandler.runBuffer(info);
-
         return buf;
     }
 
