@@ -119,6 +119,7 @@
 #include "include/ports/SkFontMgr_android_ndk.h"
 #elif defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
 #include "include/ports/SkFontMgr_fontconfig.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 /* Fallback: FreeType Custom Directory (embedded / no platform FontMgr) */
 #include "include/ports/SkFontMgr_directory.h"
@@ -1187,7 +1188,7 @@ static sk_sp<SkFontMgr> cevg_make_fontmgr() {
 #elif defined(SK_BUILD_FOR_ANDROID)
     return SkFontMgr_New_AndroidNDK();
 #elif defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
-    return SkFontMgr_New_FontConfig(nullptr);
+    return SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
 #else
     /* Fallback: FreeType Custom Directory (no platform FontMgr available) */
     const char* dir = cevg_system_font_dir();
@@ -2732,6 +2733,10 @@ static bool cevg_shape_text(const char* text, size_t len,
     auto bidiIter = SkShaper::MakeBiDiRunIterator(txt.c_str(), txt.size(), leftToRight ? 0 : 1);
     auto scriptIter = SkShaper::MakeScriptRunIterator(txt.c_str(), txt.size(), SkSetFourByteTag(0, 0, 0, 0));
     auto fontIter = SkShaper::MakeFontMgrRunIterator(txt.c_str(), txt.size(), font, fontMgr);
+
+    if (!fontIter) {
+        fontIter = std::make_unique<SkShaper::TrivialFontRunIterator>(font, txt.size());
+    }
 
     if (bidiIter && scriptIter && fontIter) {
         SkShaper::TrivialLanguageRunIterator langIter("en", txt.size());

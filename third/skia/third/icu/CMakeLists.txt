@@ -136,8 +136,23 @@ endif()
 # Targets
 # ============================================================================
 
-# ---- icudt (stub data) ----
-add_library(icudt STATIC ${STUBDATA_SRCS})
+# ---- icudt ----
+# Windows: stubdata (empty shell) + runtime file loading via SkLoadICU
+# Linux/macOS: embed real ICU data via .S + .incbin
+if(WIN32)
+    add_library(icudt STATIC ${STUBDATA_SRCS})
+else()
+    set(ICU_DAT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/icudtl.dat")
+    set(ICU_DAT_S "${CMAKE_CURRENT_BINARY_DIR}/icudtl_dat.S")
+    file(WRITE "${ICU_DAT_S}" [=[.globl icudt74_dat
+.section .rodata
+icudt74_dat:
+    .incbin "]=] "${ICU_DAT_FILE}" [=["
+.size icudt74_dat, . - icudt74_dat
+.section .note.GNU-stack,"",@progbits
+]=])
+    add_library(icudt STATIC "${ICU_DAT_S}")
+endif()
 target_include_directories(icudt
   PUBLIC
     "$<BUILD_INTERFACE:${ICU_SRC_DIR}/common>"
@@ -156,7 +171,13 @@ set_target_properties(icudt PROPERTIES
 )
 
 # ---- icuuc (common) ----
-add_library(icuuc STATIC ${COMMON_SRCS} "${CMAKE_CURRENT_SOURCE_DIR}/SkLoadICU.cpp")
+# SkLoadICU.cpp only needed on Windows (runtime file loading)
+if(WIN32)
+    set(ICUUC_EXTRA_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/SkLoadICU.cpp")
+else()
+    set(ICUUC_EXTRA_SRCS)
+endif()
+add_library(icuuc STATIC ${COMMON_SRCS} ${ICUUC_EXTRA_SRCS})
 target_include_directories(icuuc
   PUBLIC
     "$<BUILD_INTERFACE:${ICU_SRC_DIR}/common>"

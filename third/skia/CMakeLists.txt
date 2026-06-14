@@ -13,6 +13,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(Skia VERSION 1.0.0 LANGUAGES C CXX ASM)
 
+find_package(PkgConfig)
+
 # ============================================================================
 # Skia source directory selection (configurable via -DSKIA_SRC_DIR=xxx)
 # This allows building from any official Skia clone without modifying it.
@@ -273,12 +275,22 @@ if(WIN32)
         SK_TYPEFACE_FACTORY_DIRECTWRITE
         SK_FONTMGR_DIRECTWRITE_AVAILABLE
     )
-endif()
-if(APPLE)
+elseif(APPLE)
     list(APPEND SKIA_DEFINES
         SK_TYPEFACE_FACTORY_CORETEXT
         SK_FONTMGR_CORETEXT_AVAILABLE
     )
+endif()
+
+# ---- Fontconfig (Linux system font discovery) ----
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(FONTCONFIG fontconfig)
+        if(FONTCONFIG_FOUND)
+            message(STATUS "Fontconfig found: ${FONTCONFIG_LIBRARIES}")
+            list(APPEND SKIA_DEFINES SK_FONTMGR_FONTCONFIG_AVAILABLE)
+        endif()
+    endif()
 endif()
 
 # ============================================================================
@@ -1924,6 +1936,14 @@ list(APPEND SKIA_INCLUDES
         )
     endif()
 
+    # Non-Windows: POSIX file ops and stdio logging
+    if(NOT WIN32)
+        list(APPEND SKIA_PORT_SOURCES
+            "${SKIA_ROOT}/src/ports/SkOSFile_posix.cpp"
+            "${SKIA_ROOT}/src/ports/SkLog_stdio.cpp"
+        )
+    endif()
+
     # FreeType support sources (cross-platform font rendering)
     if(SKIA_USE_FREETYPE)
         list(APPEND SKIA_PORT_SOURCES
@@ -1939,6 +1959,14 @@ list(APPEND SKIA_INCLUDES
             "${SKIA_ROOT}/src/ports/SkFontScanner_FreeType_priv.h"
             "${SKIA_ROOT}/src/ports/SkTypeface_FreeType.h"
             "${SKIA_ROOT}/src/ports/SkFontMgr_custom.h"
+        )
+    endif()
+
+    # FontConfig (Linux system font discovery)
+    if(FONTCONFIG_FOUND)
+        list(APPEND SKIA_PORT_SOURCES
+            "${SKIA_ROOT}/src/ports/SkFontMgr_fontconfig.cpp"
+            "${SKIA_ROOT}/src/ports/SkTypeface_proxy.cpp"
         )
     endif()
 
@@ -2562,15 +2590,18 @@ if(SKIA_USE_ICU)
         "${SKIA_THIRD_DIR}/icu/source/i18n"
         "${SKIA_THIRD_DIR}/icu/source/i18n/unicode"
     )
-    # Copy ICU data file to output directory (required at runtime on Windows)
-    set(ICU_DAT_FILE "${SKIA_THIRD_DIR}/icu/icudtl.dat")
-    if(EXISTS "${ICU_DAT_FILE}")
-        add_custom_command(TARGET skia POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ICU_DAT_FILE}"
-                "${CMAKE_BINARY_DIR}/bin/icudtl.dat"
-            COMMENT "Copying icudtl.dat to bin directory"
-        )
+    # Copy ICU data file to output directory (required at runtime on Windows only)
+    # Linux/macOS: icudtl.dat is embedded into the binary via .S + .incbin
+    if(WIN32)
+        set(ICU_DAT_FILE "${SKIA_THIRD_DIR}/icu/icudtl.dat")
+        if(EXISTS "${ICU_DAT_FILE}")
+            add_custom_command(TARGET skia POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${ICU_DAT_FILE}"
+                    "${CMAKE_BINARY_DIR}/bin/icudtl.dat"
+                COMMENT "Copying icudtl.dat to bin directory"
+            )
+        endif()
     endif()
 endif()
 
@@ -2583,6 +2614,12 @@ if(SKIA_USE_FREETYPE)
         "${SKIA_THIRD_DIR}/freetype/include"
         "${CMAKE_BINARY_DIR}/_deps/freetype/include"
     )
+endif()
+
+# FontConfig (Linux) — needed by SkFontMgr_fontconfig
+if(FONTCONFIG_FOUND)
+    target_link_libraries(skia PUBLIC ${FONTCONFIG_LIBRARIES})
+    target_include_directories(skia PUBLIC ${FONTCONFIG_INCLUDE_DIRS})
 endif()
 
 # ============================================================================
