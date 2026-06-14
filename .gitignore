@@ -1,0 +1,72 @@
+# Build directories
+build/
+bninja/
+build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+.idea/
+*.swp
+*~
+
+# Compiled
+*.obj
+*.o
+*.lib
+*.a
+*.so
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.d
+*.ko
+*.elf
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+.ninja_deps
+.ninja_log
+build.ninja
+rules.ninja
+CPackConfig.cmake
+CPackSourceConfig.cmake
+compile_commands.json
+CTestTestfile.cmake
+DependInfo.cmake
+*.stamp
+
+# Generated .def (written to build dir by CMake)
+*.def
+
+# Archives / packages
+*.7z
+*.zip
+*.tar
+*.gz
+
+# Python
+*.pyc
+__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Misc
+*.bak
+*.log
+*.tmp
