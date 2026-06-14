@@ -147,6 +147,7 @@ else()
     set(ICU_DAT_S "${CMAKE_CURRENT_BINARY_DIR}/icudtl_dat.S")
     file(WRITE "${ICU_DAT_S}" [=[.globl icudt74_dat
 .section .rodata
+.balign 16
 icudt74_dat:
     .incbin "]=] "${ICU_DAT_FILE}" [=["
 .size icudt74_dat, . - icudt74_dat
