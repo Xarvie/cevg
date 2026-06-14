@@ -18,7 +18,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(icu
   LANGUAGES C CXX
-  VERSION 78.1
+  VERSION 74.2
 )
 
 # ICU headers require C++17 (auto template params, nested namespaces)

@@ -124,16 +124,16 @@ set(EXPAT_BUILD_DOCS OFF CACHE BOOL "Build expat docs" FORCE)
 set(EXPAT_BUILD_TOOLS OFF CACHE BOOL "Build expat tools" FORCE)
 set(EXPAT_BUILD_EXAMPLES OFF CACHE BOOL "Build expat examples" FORCE)
 add_subdirectory("${SKIA_THIRD_DIR}/expat/expat" ${CMAKE_BINARY_DIR}/_deps/expat)
-# After add_subdirectory, override the detected entropy macros to match GN:
-# - Undefine HAVE_ARC4RANDOM_BUF (detected on newer glibc but missing headers in clang)
-# - Undefine HAVE_GETRANDOM / HAVE_SYSCALL_GETRANDOM (same reason)
-# - Define XML_DEV_URANDOM=1 (the only entropy source Skia's GN build uses)
-target_compile_definitions(expat PRIVATE
-    XML_DEV_URANDOM=1
-    HAVE_ARC4RANDOM_BUF=0
-    HAVE_GETRANDOM=0
-    HAVE_SYSCALL_GETRANDOM=0
-)
+# After add_subdirectory, override the detected entropy macros on non-Windows:
+# Windows uses rand_s; only Unix needs XML_DEV_URANDOM.
+if(NOT WIN32)
+    target_compile_definitions(expat PRIVATE
+        XML_DEV_URANDOM=1
+        HAVE_ARC4RANDOM_BUF=0
+        HAVE_GETRANDOM=0
+        HAVE_SYSCALL_GETRANDOM=0
+    )
+endif()
 add_library(skia_expat ALIAS expat)
 
 # ============================================================================
