@@ -79,7 +79,7 @@ set(ICU_INCLUDE_DIRS "${ICU_INCLUDE_DIR}" CACHE INTERNAL "")
 set(ICU_LIBRARY icuuc CACHE INTERNAL "")
 set(ICU_LIBRARIES icuuc CACHE INTERNAL "")
 set(ICU_uc_FOUND TRUE CACHE INTERNAL "")
-set(ICU_VERSION 78.1 CACHE INTERNAL "")
+set(ICU_VERSION 74.2 CACHE INTERNAL "")
 
 # Also create skia_icu alias for Skia's link step
 add_library(skia_icu INTERFACE)

@@ -44,7 +44,7 @@ target_include_directories(test_cevg_overlap PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CEVG_GLAD_INCLUDE}"
 )
-target_link_libraries(test_cevg_overlap PRIVATE cevg)
+target_link_libraries(test_cevg_overlap PRIVATE cevg $<$<PLATFORM_ID:Linux>:m>)
 if(CEVG_VULKAN)
     target_compile_definitions(test_cevg_overlap PRIVATE CEVG_VULKAN)
 endif()
@@ -69,7 +69,7 @@ target_include_directories(test_cevg_render PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CEVG_GLAD_INCLUDE}"
 )
-target_link_libraries(test_cevg_render PRIVATE cevg)
+target_link_libraries(test_cevg_render PRIVATE cevg $<$<PLATFORM_ID:Linux>:m>)
 if(CEVG_VULKAN)
     target_compile_definitions(test_cevg_render PRIVATE CEVG_VULKAN)
 endif()
