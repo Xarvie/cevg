@@ -396,6 +396,7 @@ struct CevgTextBlob_ {
     int*      cluster_indices;
     float     width;
     float     height;
+    size_t    text_len;     /* source string byte length (for end-of-line cursor) */
 
     /* The primary typeface, ref'd for the blob's lifetime so it outlives the
      * blob even if the caller unrefs their handle. (Fallback fonts are already
@@ -2596,6 +2597,7 @@ struct CevgShaperResult {
     std::vector<SkGlyphID>  glyphIDs;
     std::vector<SkPoint>    positions;
     std::vector<uint32_t>   clusters;   /* UTF-8 byte offset for each glyph */
+    std::vector<float>      advances;   /* per-glyph advance width from font metrics */
 
     /* Per-run data, in visual order. */
     struct Run {
@@ -2613,7 +2615,7 @@ struct CevgShaperResult {
 
     /* Typographic metrics from the primary font. */
     float lineHeight = 0;
-    float shapedWidth = 0;   /* right edge of the last glyph (from positions) */
+    float shapedWidth = 0;   /* rightmost pen-advance edge (max of origin+advance) */
 };
 
 class CevgRunHandler : public SkShaper::RunHandler {
@@ -2649,6 +2651,18 @@ private:
             fResult->clusters.push_back(
                 fCurrentBuffer.clusters ? fCurrentBuffer.clusters[i]
                                         : (uint32_t)run.byteStart);
+        }
+
+        /* Get real per-glyph advances from this run's font.
+         * SkFont::getWidths returns the nominal advance for each glyph,
+         * which is the correct "cell width" — positions already include
+         * kerning/GPOS adjustments, but advance is the typographic step. */
+        if (info.glyphCount > 0) {
+            std::vector<SkScalar> adv(info.glyphCount);
+            info.fFont.getWidths(SkSpan<const SkGlyphID>{fCurrentBuffer.glyphs, (size_t)info.glyphCount},
+                                 SkSpan<SkScalar>{adv.data(), (size_t)info.glyphCount});
+            for (int i = 0; i < info.glyphCount; ++i)
+                fResult->advances.push_back(adv[i]);
         }
 
         fResult->runs.push_back(run);
@@ -2744,19 +2758,18 @@ static bool cevg_shape_text(const char* text, size_t len,
     /* Typographic metrics (fm was already fetched above for the blob offset). */
     result->lineHeight = fm.fDescent - fm.fAscent;
 
-    /* Compute shaped width from the native blob's tight bounds.
-     * bounds().right() gives the distance from x=0 to the rightmost pixel
-     * edge, including the last glyph's advance — the correct value for
-     * layout (positioning the next text block). */
-    if (result->nativeBlob) {
-        result->shapedWidth = result->nativeBlob->bounds().right();
-    } else {
-        float maxX = 0;
-        for (const auto& pos : result->positions) {
-            if (pos.x() > maxX) maxX = pos.x();
-        }
-        result->shapedWidth = maxX;
+    /* Compute shaped width as the rightmost pen-advance edge.
+     * Layout width = max(glyph_origin + its_advance) across all glyphs.
+     * This is the true typographic advance width — the position where the
+     * pen would rest after the last glyph. Using bounds().right() was wrong
+     * because SkTextBlob::bounds() is a conservative ink bounding box that
+     * often exceeds the actual advance width. */
+    float w = 0.0f;
+    for (size_t i = 0; i < result->positions.size(); ++i) {
+        float adv = (i < result->advances.size()) ? result->advances[i] : 0.0f;
+        w = std::max(w, result->positions[i].x() + adv);
     }
+    result->shapedWidth = w;
 
     return result->glyphIDs.size() > 0;
 }
@@ -2764,7 +2777,8 @@ static bool cevg_shape_text(const char* text, size_t len,
 /* Fill a CevgTextBlob from a CevgShaperResult. */
 static CevgTextBlob* cevg_blob_from_result(CevgShaperResult* result, float fontSize,
                                            CevgTextDirection paraDir,
-                                           const CevgTypeface* primaryTypeface) {
+                                           const CevgTypeface* primaryTypeface,
+                                           size_t textLen) {
     int totalGlyphs = (int)result->glyphIDs.size();
     if (totalGlyphs <= 0) return nullptr;
 
@@ -2793,20 +2807,18 @@ static CevgTextBlob* cevg_blob_from_result(CevgShaperResult* result, float fontS
 
     blob->height = result->lineHeight;
     blob->width  = result->shapedWidth;
+    blob->text_len = textLen;
     blob->native_blob = result->nativeBlob;
     blob->font_size = fontSize;
     blob->para_dir  = paraDir;
 
-    /* Compute per-glyph advances from position differences.
-     * Use fabs() so RTL runs (where positions decrease left-to-right)
-     * still produce positive advance values. */
+    /* Copy real per-glyph advances from the shaper (taken via SkFont::getWidths
+     * per run). These are the true typographic advance widths, not reconstructed
+     * from position differences. */
     blob->advances = (float*)calloc(totalGlyphs, sizeof(float));
-    if (blob->advances) {
-        for (int i = 0; i < totalGlyphs; i++) {
-            blob->advances[i] = (i + 1 < totalGlyphs)
-                ? fabsf(blob->positions_x[i + 1] - blob->positions_x[i])
-                : fabsf(blob->width - blob->positions_x[i]);
-        }
+    if (blob->advances && (int)result->advances.size() == totalGlyphs) {
+        for (int i = 0; i < totalGlyphs; i++)
+            blob->advances[i] = result->advances[i];
     }
 
     /* Store real run info from the shaper. */
@@ -2872,7 +2884,7 @@ extern "C" CevgTextBlob* cevg_text_blob_make(const char* text, size_t len,
         paraDir = result.runs.empty() ? kCevgDir_LTR : result.runs[0].dir;
     }
 
-    return cevg_blob_from_result(&result, size, paraDir, typeface);
+    return cevg_blob_from_result(&result, size, paraDir, typeface, len);
 }
 
 /* ---- UTF-8 decode helper ---- */
@@ -2972,7 +2984,7 @@ extern "C" CevgTextBlob* cevg_text_blob_make_ex(const char* text, size_t len,
         paraDir = result.runs.empty() ? kCevgDir_LTR : result.runs[0].dir;
     }
 
-    return cevg_blob_from_result(&result, size, paraDir, typeface);
+    return cevg_blob_from_result(&result, size, paraDir, typeface, len);
 }
 
 extern "C" void cevg_text_blob_destroy(CevgTextBlob* blob) {
@@ -3017,20 +3029,27 @@ extern "C" int cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float 
     if (!blob) return -1;
     if (blob->glyph_count == 0) return -1;
 
-    float best_dist = 1e10f;
-    int best_idx = -1;
+    /* Advance-based hit testing: for each glyph, check if x falls within
+     * [origin, origin + advance). If in the left half, return this glyph's
+     * cluster; if in the right half, return the next cluster (cursor after).
+     * If x is past the last glyph, return text_len (end-of-line cursor). */
     for (int i = 0; i < blob->glyph_count; i++) {
-        float dx = x - blob->positions_x[i];
-        float dy = y - blob->positions_y[i];
-        float dist = dx * dx + dy * dy;
-        if (dist < best_dist) {
-            best_dist = dist;
-            best_idx = i;
+        float origin = blob->positions_x[i];
+        float adv = (blob->advances) ? blob->advances[i] : 0.0f;
+        float right = origin + adv;
+        if (x < right || i == blob->glyph_count - 1) {
+            /* x is within or past this glyph's advance cell */
+            float mid = origin + adv * 0.5f;
+            if (x > mid && i + 1 < blob->glyph_count) {
+                /* Right half → cursor after this glyph */
+                return blob->cluster_indices[i + 1];
+            }
+            return blob->cluster_indices[i];
         }
     }
-    if (best_idx < 0) return -1;
 
-    return blob->cluster_indices[best_idx];
+    /* Past all glyphs → end-of-line cursor */
+    return (int)blob->text_len;
 }
 
 /* ---- New text-editor APIs ---- */
@@ -3039,12 +3058,21 @@ extern "C" void cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, floa
     if (!blob || !out) return;
     if (blob->advances) {
         memcpy(out, blob->advances, blob->glyph_count * sizeof(float));
+    }
+    /* If advances is NULL (shouldn't happen with current implementation),
+     * out is left as-is — caller should zero-initialize for safety. */
+}
+
+extern "C" void cevg_text_blob_get_ink_bounds(const CevgTextBlob* blob, float out[4]) {
+    if (!blob || !out) return;
+    if (blob->native_blob) {
+        SkRect r = blob->native_blob->bounds();
+        out[0] = r.x();       /* left */
+        out[1] = r.y();       /* top */
+        out[2] = r.width();   /* width */
+        out[3] = r.height();  /* height */
     } else {
-        for (int i = 0; i < blob->glyph_count; i++) {
-            out[i] = (i + 1 < blob->glyph_count)
-                     ? fabsf(blob->positions_x[i + 1] - blob->positions_x[i])
-                     : fabsf(blob->width - blob->positions_x[i]);
-        }
+        out[0] = out[1] = out[2] = out[3] = 0;
     }
 }
 

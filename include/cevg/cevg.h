@@ -742,8 +742,9 @@ CEVG_API float         cevg_text_blob_get_height(const CevgTextBlob* blob);  /* 
 CEVG_API int           cevg_text_blob_get_glyph_count(const CevgTextBlob* blob);
 CEVG_API void          cevg_text_blob_get_glyph_positions(const CevgTextBlob* blob, float* out_x, float* out_y);  /* out_x/y must hold glyph_count floats; positions are baseline-relative */
 CEVG_API void          cevg_text_blob_get_cluster_info(const CevgTextBlob* blob, int* char_indices);  /* out must hold glyph_count ints; each is a UTF-8 byte offset */
-CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* returns UTF-8 byte offset of nearest glyph, or -1 */
+CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* advance-based hit test; returns UTF-8 byte offset for cursor position, or text_len for end-of-line */
 CEVG_API void          cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, float* out_advances);
+CEVG_API void          cevg_text_blob_get_ink_bounds(const CevgTextBlob* blob, float out[4]);  /* conservative ink bounding box: {left, top, width, height}; may exceed advance width */
 CEVG_API int           cevg_text_blob_get_run_count(const CevgTextBlob* blob);
 /* Fill an array of run records. `out_runs` points to `count` records each
  * `run_stride` bytes apart; pass count = cevg_text_blob_get_run_count() and
