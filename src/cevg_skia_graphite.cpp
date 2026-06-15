@@ -2266,7 +2266,7 @@ extern "C" void cevg_canvas_save_layer(CevgCanvas* c, float alpha,
     if (!c || !c->canvas) return;
     SkRect rect;
     const SkRect* pbounds = nullptr;
-    if (bounds) { rect = SkRect::MakeLTRB(bounds[0], bounds[1], bounds[2], bounds[3]); pbounds = &rect; }
+    if (bounds) { rect = SkRect::MakeXYWH(bounds[0], bounds[1], bounds[2], bounds[3]); pbounds = &rect; }
 
     SkPaint layerPaint;
     if (paint) {
@@ -2626,9 +2626,10 @@ class CevgRunHandler : public SkShaper::RunHandler {
      * need for a second shaping pass. */
     SkTextBlobBuilderRunHandler fBlobHandler;
 public:
-    CevgRunHandler(const char* text, size_t len, CevgShaperResult* result)
+    CevgRunHandler(const char* text, size_t len, CevgShaperResult* result,
+                   SkPoint blobOffset = {0, 0})
         : fText(text), fTextLen(len), fResult(result), fGlyphOffset(0),
-          fBlobHandler(text, {0, 0}) {}
+          fBlobHandler(text, blobOffset) {}
 
     sk_sp<SkTextBlob> makeBlob() { return fBlobHandler.makeBlob(); }
 
@@ -2707,7 +2708,18 @@ static bool cevg_shape_text(const char* text, size_t len,
     if (!shaper) shaper = SkShaper::MakePrimitive();
     if (!shaper) return false;
 
-    CevgRunHandler handler(txt.c_str(), txt.size(), result);
+    /* Get font metrics BEFORE shaping so we can pass the ascent as the
+     * blob handler offset. SkTextBlobBuilderRunHandler::commitRunInfo()
+     * does fCurrentPosition.fY -= fMaxRunAscent, which shifts glyph Y
+     * by |ascent|. By passing offset {0, ascent} (ascent is negative),
+     * the shift cancels out: fCurrentPosition.fY = ascent - fMaxRunAscent
+     * ≈ 0, so the blob's internal coordinates are baseline-relative.
+     * This makes drawTextBlob(blob, x, y) treat y as baseline (Skia
+     * convention) without any runtime compensation. */
+    SkFontMetrics fm;
+    font.getMetrics(&fm);
+
+    CevgRunHandler handler(txt.c_str(), txt.size(), result, {0, fm.fAscent});
     auto bidiIter = SkShaper::MakeBiDiRunIterator(txt.c_str(), txt.size(), leftToRight ? 0 : 1);
     auto scriptIter = SkShaper::MakeScriptRunIterator(txt.c_str(), txt.size(), SkSetFourByteTag(0, 0, 0, 0));
     auto fontIter = SkShaper::MakeFontMgrRunIterator(txt.c_str(), txt.size(), font, fontMgr);
@@ -2729,17 +2741,22 @@ static bool cevg_shape_text(const char* text, size_t len,
      * internal SkTextBlobBuilderRunHandler — no second shaping needed. */
     result->nativeBlob = handler.makeBlob();
 
-    /* Compute typographic metrics. */
-    SkFontMetrics fm;
-    font.getMetrics(&fm);
+    /* Typographic metrics (fm was already fetched above for the blob offset). */
     result->lineHeight = fm.fDescent - fm.fAscent;
 
-    /* Compute shaped width from the rightmost glyph position. */
-    float maxX = 0;
-    for (const auto& pos : result->positions) {
-        if (pos.x() > maxX) maxX = pos.x();
+    /* Compute shaped width from the native blob's tight bounds.
+     * bounds().right() gives the distance from x=0 to the rightmost pixel
+     * edge, including the last glyph's advance — the correct value for
+     * layout (positioning the next text block). */
+    if (result->nativeBlob) {
+        result->shapedWidth = result->nativeBlob->bounds().right();
+    } else {
+        float maxX = 0;
+        for (const auto& pos : result->positions) {
+            if (pos.x() > maxX) maxX = pos.x();
+        }
+        result->shapedWidth = maxX;
     }
-    result->shapedWidth = maxX;
 
     return result->glyphIDs.size() > 0;
 }
@@ -2820,22 +2837,20 @@ static CevgTextBlob* cevg_blob_from_result(CevgShaperResult* result, float fontS
  * TextBlob
  * =================================================================== */
 /* ================================================================
- * IMPORTANT: Glyph Y positions in CevgTextBlob (baseline offset)
+ * Glyph Y positions in CevgTextBlob (baseline convention)
  * ================================================================
  *
- * When Skia creates a SkTextBlob via SkTextBlobBuilderRunHandler,
- * each glyph's internal Y position is set to the font's -ascent value
- * (e.g., Arial 14px → glyph_y ≈ +12.67).
+ * SkTextBlobBuilderRunHandler::commitRunInfo() shifts glyph Y by
+ * -fMaxRunAscent (i.e. +|ascent|), which makes the handler's offset
+ * point represent the TOP of the text, not the baseline.
  *
- * This means the blob already contains the baseline offset.
- * When calling drawTextBlob(blob, x, y), the screen position is:
- *   screen_x = x + blob_glyph_x
- *   screen_y = y + blob_glyph_y  ← y + (-ascent) = y + 12.67
- *
- * Therefore, the caller should pass the TOP of the text box as `y`,
- * NOT (box.y - ascent). The blob handles the baseline internally.
- *
- * See BUG FIX comment in cevg_gui/src/cevg_gui_renderer.c for full details.
+ * To preserve Skia's baseline convention in our public API, we pass
+ * {0, ascent} (ascent is negative) as the handler offset. This way
+ * commitRunInfo()'s shift cancels out:
+ *   fCurrentPosition.fY = ascent - fMaxRunAscent ≈ 0
+ * so the blob's internal coordinates are baseline-relative, and
+ * drawTextBlob(blob, x, y) treats y as baseline — no runtime
+ * compensation needed.
  * ================================================================
  */
 extern "C" CevgTextBlob* cevg_text_blob_make(const char* text, size_t len,
@@ -3015,9 +3030,7 @@ extern "C" int cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float 
     }
     if (best_idx < 0) return -1;
 
-    if (blob->cluster_indices)
-        return blob->cluster_indices[best_idx];
-    return best_idx;
+    return blob->cluster_indices[best_idx];
 }
 
 /* ---- New text-editor APIs ---- */
@@ -3136,6 +3149,7 @@ extern "C" int cevg_text_find_line_breaks(const char* text, size_t len,
  * =================================================================== */
 extern "C" CevgResult cevg_image_create_from_file(const char* path, CevgImage** out_image) {
     if (!path || !out_image) return kCevgErrorInvalidArg;
+    *out_image = nullptr;
 
     auto skData = SkData::MakeFromFileName(path);
     if (!skData) return kCevgErrorFileNotFound;
@@ -3154,6 +3168,7 @@ extern "C" CevgResult cevg_image_create_from_file(const char* path, CevgImage** 
 extern "C" CevgResult cevg_image_create_from_memory(const void* data, size_t len,
                                          CevgImage** out_image) {
     if (!data || !len || !out_image) return kCevgErrorInvalidArg;
+    *out_image = nullptr;
 
     auto skData = SkData::MakeWithCopy(data, len);
     auto img = SkImages::DeferredFromEncodedData(skData);

@@ -439,8 +439,10 @@ typedef struct {
 
 /* ---- Version / Backend ---- */
 
+/* Library version string (e.g. "0.2.0"). Static lifetime, never NULL. */
 CEVG_API const char* cevg_version(void);
-/* Always returns "skia_graphite_vulkan" in this build. Diagnostics only. */
+/* Active backend name: "cpu" or "skia_graphite_vulkan". Diagnostics only.
+ * Static lifetime, never NULL. */
 CEVG_API const char* cevg_backend_name(void);
 
 /* ---- Context ----
@@ -615,12 +617,12 @@ CEVG_API void         cevg_canvas_get_transform(const CevgCanvas* canvas, float 
 
 CEVG_API void         cevg_canvas_clip_rect(CevgCanvas* canvas, float x, float y, float w, float h);
 CEVG_API void         cevg_canvas_clip_path(CevgCanvas* canvas, const CevgPath* path);
-CEVG_API void         cevg_canvas_get_clip_bounds(CevgCanvas* canvas, float rect[4]);
+CEVG_API void         cevg_canvas_get_clip_bounds(CevgCanvas* canvas, float rect[4]);  /* rect = {left, top, width, height} in device space */
 
 CEVG_API void         cevg_canvas_clear(CevgCanvas* canvas, float r, float g, float b, float a);
 
 /* Offscreen layer. alpha multiplies the paint's alpha; bounds is optional
- * LTRB; paint supplies blend, image filter, and backdrop filter. */
+ * XYWH; paint supplies blend, image filter, and backdrop filter. */
 CEVG_API void         cevg_canvas_save_layer(CevgCanvas* canvas, float alpha,
                                                 const float bounds[4], CevgPaint* paint);
 CEVG_API void         cevg_canvas_restore_layer(CevgCanvas* canvas);
@@ -630,9 +632,11 @@ CEVG_API void         cevg_canvas_draw_rect(CevgCanvas* canvas, float x, float y
 CEVG_API void         cevg_canvas_draw_round_rect(CevgCanvas* canvas, float x, float y, float w, float h, float rx, float ry, CevgPaint* paint);
 CEVG_API void         cevg_canvas_draw_circle(CevgCanvas* canvas, float cx, float cy, float r, CevgPaint* paint);
 CEVG_API void         cevg_canvas_draw_oval(CevgCanvas* canvas, float cx, float cy, float rx, float ry, CevgPaint* paint);
+/* Draw a line. The paint is forced to stroke style (a line has no fill). */
 CEVG_API void         cevg_canvas_draw_line(CevgCanvas* canvas, float x0, float y0, float x1, float y1, CevgPaint* paint);
 CEVG_API void         cevg_canvas_draw_path(CevgCanvas* canvas, const CevgPath* path, CevgPaint* paint);
 CEVG_API void         cevg_canvas_draw_image(CevgCanvas* canvas, const CevgImage* image, float x, float y, CevgPaint* paint);
+/* Draw a sub-rectangle of an image. src_rect and dst_rect are XYWH. */
 CEVG_API void         cevg_canvas_draw_image_rect(CevgCanvas* canvas, const CevgImage* image, const float src_rect[4], const float dst_rect[4], CevgPaint* paint);
 /* Draw a nine-patch image.  `center` is LTRB in image-pixel space
  * (left, top, right, bottom) defining the stretchable center region;
@@ -642,6 +646,7 @@ CEVG_API void         cevg_canvas_draw_image_rect(CevgCanvas* canvas, const Cevg
  * backend this is decomposed into up to 9 drawImageRect calls
  * because SkCanvas::drawImageNine is not yet supported. */
 CEVG_API void         cevg_canvas_draw_image_nine(CevgCanvas* canvas, const CevgImage* image, const float center[4], const float dst[4], CevgPaint* paint);
+/* Draw a shaped text blob. (x, y) is the baseline origin (Skia convention). */
 CEVG_API void         cevg_canvas_draw_text_blob(CevgCanvas* canvas, const CevgTextBlob* blob, float x, float y, CevgPaint* paint);
 CEVG_API void         cevg_canvas_draw_surface(CevgCanvas* canvas, const CevgSurface* surface, float x, float y, CevgPaint* paint);
 
@@ -685,7 +690,7 @@ CEVG_API void         cevg_path_cubic_to(CevgPath* path, float c1x, float c1y, f
 CEVG_API void         cevg_path_close(CevgPath* path);
 CEVG_API void         cevg_path_set_fill_rule(CevgPath* path, CevgFillRule rule);
 CEVG_API CevgFillRule cevg_path_get_fill_rule(const CevgPath* path);
-CEVG_API void         cevg_path_get_bounds(const CevgPath* path, float rect[4]);
+CEVG_API void         cevg_path_get_bounds(const CevgPath* path, float rect[4]);  /* rect = {x, y, width, height} */
 
 /* ---- Paint (backend-agnostic, cevg_common.c) ----
  * Defaults: color = opaque black, style = Fill, alpha = 1, anti_alias =
@@ -696,6 +701,7 @@ CEVG_API CevgPaint*   cevg_paint_create(void);
 CEVG_API void         cevg_paint_destroy(CevgPaint* paint);
 CEVG_API void         cevg_paint_reset(CevgPaint* paint);
 CEVG_API void         cevg_paint_set_color(CevgPaint* paint, float r, float g, float b, float a);
+/* Set color from packed 0xAARRGGBB. */
 CEVG_API void         cevg_paint_set_color_argb(CevgPaint* paint, uint32_t argb);
 CEVG_API void         cevg_paint_set_style(CevgPaint* paint, CevgPaintStyle style);
 CEVG_API void         cevg_paint_set_alpha(CevgPaint* paint, float alpha);
@@ -707,17 +713,17 @@ CEVG_API void         cevg_paint_set_stroke_join(CevgPaint* paint, CevgJoin join
 CEVG_API void         cevg_paint_set_stroke_miter(CevgPaint* paint, float limit);
 CEVG_API void         cevg_paint_set_dash(CevgPaint* paint, const float* dashes, int count, float phase);
 CEVG_API void         cevg_paint_clear_dash(CevgPaint* paint);
-CEVG_API void         cevg_paint_set_linear_gradient(CevgPaint* paint, float x0, float y0, float x1, float y1, const uint32_t* colors, const float* stops, int count, CevgTileMode tile);
-CEVG_API void         cevg_paint_set_radial_gradient(CevgPaint* paint, float cx, float cy, float radius, const uint32_t* colors, const float* stops, int count, CevgTileMode tile);
+CEVG_API void         cevg_paint_set_linear_gradient(CevgPaint* paint, float x0, float y0, float x1, float y1, const uint32_t* colors, const float* stops, int count, CevgTileMode tile);  /* colors = 0xAARRGGBB each */
+CEVG_API void         cevg_paint_set_radial_gradient(CevgPaint* paint, float cx, float cy, float radius, const uint32_t* colors, const float* stops, int count, CevgTileMode tile);  /* colors = 0xAARRGGBB each */
 CEVG_API void         cevg_paint_clear_shader(CevgPaint* paint);
 CEVG_API void         cevg_paint_set_image_shader(CevgPaint* paint, CevgImage* image, CevgTileMode tile_x, CevgTileMode tile_y);
 CEVG_API void         cevg_paint_set_blur(CevgPaint* paint, float sigma_x, float sigma_y);
-CEVG_API void         cevg_paint_set_drop_shadow(CevgPaint* paint, float dx, float dy, float sigma, uint32_t color);
+CEVG_API void         cevg_paint_set_drop_shadow(CevgPaint* paint, float dx, float dy, float sigma, uint32_t color);  /* color = 0xAARRGGBB */
 CEVG_API void         cevg_paint_set_color_matrix(CevgPaint* paint, const float matrix[20]);
 CEVG_API void         cevg_paint_set_filter_quality(CevgPaint* paint, CevgFilterQuality quality);
 CEVG_API void         cevg_paint_clear_filter(CevgPaint* paint);
 CEVG_API void         cevg_paint_set_backdrop_blur(CevgPaint* paint, float sigma_x, float sigma_y);
-CEVG_API void         cevg_paint_set_backdrop_shadow(CevgPaint* paint, float dx, float dy, float sigma, uint32_t color);
+CEVG_API void         cevg_paint_set_backdrop_shadow(CevgPaint* paint, float dx, float dy, float sigma, uint32_t color);  /* color = 0xAARRGGBB */
 CEVG_API void         cevg_paint_clear_backdrop(CevgPaint* paint);
 
 /* ---- Typeface (reference-counted) ---- */
@@ -731,12 +737,12 @@ CEVG_API void          cevg_typeface_get_metrics(const CevgTypeface* typeface, f
 CEVG_API CevgTextBlob* cevg_text_blob_make(const char* text, size_t len, const CevgTypeface* typeface, float size, CevgTextDirection dir);
 CEVG_API CevgTextBlob* cevg_text_blob_make_ex(const char* text, size_t len, const CevgTypeface* typeface, float size, CevgTextDirection dir, const CevgTypeface** fallbacks, int fallback_count);
 CEVG_API void          cevg_text_blob_destroy(CevgTextBlob* blob);
-CEVG_API float         cevg_text_blob_get_width(const CevgTextBlob* blob);
-CEVG_API float         cevg_text_blob_get_height(const CevgTextBlob* blob);
+CEVG_API float         cevg_text_blob_get_width(const CevgTextBlob* blob);   /* layout width: x=0 to rightmost pixel edge (includes last glyph advance) */
+CEVG_API float         cevg_text_blob_get_height(const CevgTextBlob* blob);  /* line height: |ascent| + descent (no leading) */
 CEVG_API int           cevg_text_blob_get_glyph_count(const CevgTextBlob* blob);
-CEVG_API void          cevg_text_blob_get_glyph_positions(const CevgTextBlob* blob, float* out_x, float* out_y);
-CEVG_API void          cevg_text_blob_get_cluster_info(const CevgTextBlob* blob, int* char_indices);
-CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);
+CEVG_API void          cevg_text_blob_get_glyph_positions(const CevgTextBlob* blob, float* out_x, float* out_y);  /* out_x/y must hold glyph_count floats; positions are baseline-relative */
+CEVG_API void          cevg_text_blob_get_cluster_info(const CevgTextBlob* blob, int* char_indices);  /* out must hold glyph_count ints; each is a UTF-8 byte offset */
+CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* returns UTF-8 byte offset of nearest glyph, or -1 */
 CEVG_API void          cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, float* out_advances);
 CEVG_API int           cevg_text_blob_get_run_count(const CevgTextBlob* blob);
 /* Fill an array of run records. `out_runs` points to `count` records each
@@ -748,7 +754,7 @@ CEVG_API int           cevg_text_blob_get_run_count(const CevgTextBlob* blob);
 CEVG_API void          cevg_text_blob_get_runs(const CevgTextBlob* blob,
                                                   CevgTextRun* out_runs,
                                                   int count, size_t run_stride);
-CEVG_API int           cevg_text_find_line_breaks(const char* text, size_t len, int* out_breaks, int max_breaks);
+CEVG_API int           cevg_text_find_line_breaks(const char* text, size_t len, int* out_breaks, int max_breaks);  /* returns count; out_breaks=NULL to just count; each value is a UTF-8 byte offset where the next line starts */
 
 /* ---- Image (RGBA_8888, non-premultiplied source) ---- */
 CEVG_API CevgResult    cevg_image_create_from_file(const char* path, CevgImage** out_image);
