@@ -721,8 +721,8 @@ CEVG_API void         cevg_paint_set_backdrop_shadow(CevgPaint* paint, float dx,
 CEVG_API void         cevg_paint_clear_backdrop(CevgPaint* paint);
 
 /* ---- Typeface (reference-counted) ---- */
-CEVG_API CevgTypeface* cevg_typeface_create_from_file(const char* path);
-CEVG_API CevgTypeface* cevg_typeface_create_from_data(const void* data, size_t len);
+CEVG_API CevgTypeface* cevg_typeface_create_from_file(const char* path, int ttc_index);
+CEVG_API CevgTypeface* cevg_typeface_create_from_data(const void* data, size_t len, int ttc_index);
 CEVG_API void          cevg_typeface_ref(CevgTypeface* typeface);
 CEVG_API void          cevg_typeface_unref(CevgTypeface* typeface);
 CEVG_API void          cevg_typeface_get_metrics(const CevgTypeface* typeface, float font_size, CevgFontMetrics* metrics);

@@ -2521,11 +2521,11 @@ static sk_sp<SkFontMgr> cevg_shared_fontmgr() {
  * Typeface / TextBlob / Image  (shaping logic preserved from the
  * previous backend; adapted to the shared font manager and extern "C")
  * =================================================================== */
-extern "C" CevgTypeface* cevg_typeface_create_from_file(const char* path) {
+extern "C" CevgTypeface* cevg_typeface_create_from_file(const char* path, int ttc_index) {
     if (!path) return nullptr;
     auto fontMgr = cevg_shared_fontmgr();
     if (!fontMgr) return nullptr;
-    auto tf = fontMgr->makeFromFile(path);
+    auto tf = fontMgr->makeFromFile(path, ttc_index);
     if (!tf) return nullptr;
 
     CevgTypeface* ntf = new (std::nothrow) CevgTypeface();
@@ -2535,12 +2535,12 @@ extern "C" CevgTypeface* cevg_typeface_create_from_file(const char* path) {
     return ntf;
 }
 
-extern "C" CevgTypeface* cevg_typeface_create_from_data(const void* data, size_t len) {
+extern "C" CevgTypeface* cevg_typeface_create_from_data(const void* data, size_t len, int ttc_index) {
     if (!data || !len) return nullptr;
     auto fontMgr = cevg_shared_fontmgr();
     if (!fontMgr) return nullptr;
     auto skData = SkData::MakeWithCopy(data, len);
-    auto tf = fontMgr->makeFromData(skData);
+    auto tf = fontMgr->makeFromData(skData, ttc_index);
     if (!tf) return nullptr;
 
     CevgTypeface* ntf = new (std::nothrow) CevgTypeface();

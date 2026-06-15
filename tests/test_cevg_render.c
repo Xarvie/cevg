@@ -3605,7 +3605,7 @@ int main(int argc, char** argv) {
     };
     CevgTypeface* face = NULL;
     for (int i = 0; fontSearchPaths[i]; i++) {
-        face = cevg_typeface_create_from_file(fontSearchPaths[i]);
+        face = cevg_typeface_create_from_file(fontSearchPaths[i], 0);
         if (face) { printf("Font: %s\n", fontSearchPaths[i]); break; }
     }
     if (!face) {
