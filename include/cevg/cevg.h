@@ -742,10 +742,11 @@ CEVG_API float         cevg_text_blob_get_height(const CevgTextBlob* blob);  /* 
 CEVG_API int           cevg_text_blob_get_glyph_count(const CevgTextBlob* blob);
 CEVG_API void          cevg_text_blob_get_glyph_positions(const CevgTextBlob* blob, float* out_x, float* out_y);  /* out_x/y must hold glyph_count floats; positions are baseline-relative */
 CEVG_API void          cevg_text_blob_get_cluster_info(const CevgTextBlob* blob, int* char_indices);  /* out must hold glyph_count ints; each is a UTF-8 byte offset */
-CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* advance-based hit test; x/y in blob-local coords (positions_x range); returns UTF-8 byte offset, or text_len for end-of-line */
+CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* direction-aware hit test; x/y in blob-local coords (positions_x range); returns the UTF-8 byte offset of the nearest cursor position (cluster leading/trailing edge), or text_len at end-of-line. Correct for LTR and RTL runs. */
 CEVG_API void          cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, float* out_advances);  /* per-glyph advance widths from font metrics (SkFont::getWidths); out must hold glyph_count floats */
 CEVG_API void          cevg_text_blob_get_ink_bounds(const CevgTextBlob* blob, float out[4]);  /* conservative ink bounding box: {left, top, width, height}; may exceed advance width */
 CEVG_API int           cevg_text_blob_get_run_count(const CevgTextBlob* blob);
+CEVG_API CevgTextDirection cevg_text_blob_get_paragraph_direction(const CevgTextBlob* blob);  /* resolved base direction (LTR/RTL); for Auto, from the first strong char, not the first visual run */
 /* Fill an array of run records. `out_runs` points to `count` records each
  * `run_stride` bytes apart; pass count = cevg_text_blob_get_run_count() and
  * run_stride = sizeof(CevgTextRun) as the caller sees it. Writing by the

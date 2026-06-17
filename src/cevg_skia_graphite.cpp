@@ -2616,6 +2616,10 @@ struct CevgShaperResult {
     /* Typographic metrics from the primary font. */
     float lineHeight = 0;
     float shapedWidth = 0;   /* rightmost pen-advance edge (max of origin+advance) */
+
+    /* Resolved paragraph base direction (the BiDi base level used for shaping),
+     * LTR or RTL. Surfaced through the blob as para_dir. */
+    CevgTextDirection baseDir = kCevgDir_LTR;
 };
 
 class CevgRunHandler : public SkShaper::RunHandler {
@@ -2717,6 +2721,9 @@ static bool cevg_shape_text(const char* text, size_t len,
     } else {
         leftToRight = (dir == kCevgDir_LTR);
     }
+    /* Remember the resolved base direction so the blob reports it and so paraDir
+     * is taken from the BiDi base, not from the first visual run. */
+    result->baseDir = leftToRight ? kCevgDir_LTR : kCevgDir_RTL;
 
     auto shaper = SkShaper::Make(fontMgr);
     if (!shaper) shaper = SkShaper::MakePrimitive();
@@ -2878,11 +2885,11 @@ extern "C" CevgTextBlob* cevg_text_blob_make(const char* text, size_t len,
     auto fontMgr = cevg_shared_fontmgr();
     if (!cevg_shape_text(text, len, font, fontMgr, dir, &result)) return nullptr;
 
-    CevgTextDirection paraDir = dir;
-    if (paraDir == kCevgDir_Auto) {
-        /* Detect from the first run's direction, or default LTR. */
-        paraDir = result.runs.empty() ? kCevgDir_LTR : result.runs[0].dir;
-    }
+    /* Paragraph base direction = the shaper's resolved base (first strong char for
+     * Auto), NOT the first VISUAL run: for an RTL paragraph the first visual run
+     * is the logically-last run and is frequently LTR, which would mislabel the
+     * whole paragraph and break end-of-line cursor placement / alignment. */
+    CevgTextDirection paraDir = result.baseDir;
 
     return cevg_blob_from_result(&result, size, paraDir, typeface, len);
 }
@@ -2979,10 +2986,11 @@ extern "C" CevgTextBlob* cevg_text_blob_make_ex(const char* text, size_t len,
     CevgShaperResult result;
     if (!cevg_shape_text(text, len, font, compositeMgr, dir, &result)) return nullptr;
 
-    CevgTextDirection paraDir = dir;
-    if (paraDir == kCevgDir_Auto) {
-        paraDir = result.runs.empty() ? kCevgDir_LTR : result.runs[0].dir;
-    }
+    /* Paragraph base direction = the shaper's resolved base (first strong char for
+     * Auto), NOT the first VISUAL run: for an RTL paragraph the first visual run
+     * is the logically-last run and is frequently LTR, which would mislabel the
+     * whole paragraph and break end-of-line cursor placement / alignment. */
+    CevgTextDirection paraDir = result.baseDir;
 
     return cevg_blob_from_result(&result, size, paraDir, typeface, len);
 }
@@ -3025,34 +3033,98 @@ extern "C" void cevg_text_blob_get_cluster_info(const CevgTextBlob* blob,
     memcpy(char_indices, blob->cluster_indices, blob->glyph_count * sizeof(int));
 }
 
+/* Cluster end (one-past-the-last byte) of the cluster that STARTS at byte `cs`,
+ * within run `r`: the smallest cluster-start strictly greater than cs among the
+ * run's glyphs, or the run's byte_end if none. Relies only on cluster-start byte
+ * values (not on visual glyph order), so it is correct for LTR runs, RTL runs,
+ * and ligatures (one glyph spanning several bytes). */
+static int cevg_cluster_end_in_run(const CevgTextBlob* blob, int r, int cs) {
+    const CevgTextRun& run = blob->runs[r];
+    int ge = run.glyph_start + run.glyph_count;
+    int end = run.byte_end;
+    for (int g = run.glyph_start; g < ge; g++) {
+        int c = blob->cluster_indices[g];
+        if (c > cs && c < end) end = c;
+    }
+    return end;
+}
+
 extern "C" int cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y) {
+    (void)y;
     if (!blob) return -1;
     if (blob->glyph_count == 0) return -1;
 
-    /* Advance-based hit testing: for each glyph, check if x falls within
-     * [origin, origin + advance). If in the left half, return this glyph's
-     * cluster; if in the right half, return the next cluster (cursor after).
-     * If x is past the last glyph, return text_len (end-of-line cursor). */
-    for (int i = 0; i < blob->glyph_count; i++) {
-        float origin = blob->positions_x[i];
-        float adv = (blob->advances) ? blob->advances[i] : 0.0f;
-        float right = origin + adv;
-        if (x < right || i == blob->glyph_count - 1) {
-            /* x is within or past this glyph's advance cell */
-            float mid = origin + adv * 0.5f;
-            if (x > mid) {
-                /* Right half → cursor after this glyph */
-                if (i + 1 < blob->glyph_count)
-                    return blob->cluster_indices[i + 1];
-                else
-                    return (int)blob->text_len;  /* EOL cursor */
+    /* Direction-aware hit testing.
+     *
+     * The previous version walked glyphs in VISUAL order and, for a click on a
+     * glyph's right half, returned cluster_indices[i+1] -- the VISUALLY-next
+     * glyph's cluster. That is only correct for LTR runs. In an RTL run the
+     * visually-next glyph is the LOGICALLY-PREVIOUS cluster, so the returned byte
+     * was off by one cluster throughout RTL text, and disagreed with the
+     * cluster/advance data this same blob exposes (clicking where the caret is
+     * drawn landed one character away).
+     *
+     * Treat every glyph as contributing two caret "slots":
+     *     leading edge  -> cluster START byte (cluster_indices[i])
+     *     trailing edge -> cluster END byte   (next cluster boundary)
+     * For an LTR glyph the leading edge is its left edge and the trailing edge
+     * its right edge; for an RTL glyph they are mirrored (leading = right edge).
+     * Return the byte of whichever slot is nearest x. This is symmetric, agrees
+     * with caret positions computed from the same cluster/advance data (so
+     * caret<->hit round-trips), and handles ligatures (snaps to the nearest
+     * cluster edge) and the end-of-line cursor (the trailing edge of the
+     * logically-last glyph is text_len) uniformly, for both LTR and RTL.
+     *
+     * Note: at an LTR<->RTL boundary one visual x maps to two logical bytes
+     * (e.g. the end of an RTL run and the start of the next LTR run coincide).
+     * A single-valued hit test must pick one; we pick the earlier run's byte.
+     * Callers that need the other side disambiguate with cursor affinity. */
+    const int has_runs = (blob->run_count > 0 && blob->runs);
+
+    int   best_byte = 0;
+    float best_dist = 3.4e38f;
+    auto consider = [&](float edge_x, int byte) {
+        float d = x - edge_x; if (d < 0.0f) d = -d;
+        if (d < best_dist) { best_dist = d; best_byte = byte; }
+    };
+
+    if (!has_runs) {
+        /* No BiDi run info: treat as a single LTR run (visual == logical order). */
+        for (int i = 0; i < blob->glyph_count; i++) {
+            float origin = blob->positions_x[i];
+            float adv = blob->advances ? blob->advances[i] : 0.0f;
+            int cs = blob->cluster_indices[i];
+            int ce = (i + 1 < blob->glyph_count) ? blob->cluster_indices[i + 1]
+                                                 : (int)blob->text_len;
+            consider(origin,       cs);   /* leading  (left)  */
+            consider(origin + adv, ce);   /* trailing (right) */
+        }
+    } else {
+        for (int r = 0; r < blob->run_count; r++) {
+            const CevgTextRun& run = blob->runs[r];
+            const bool rtl = (run.dir == kCevgDir_RTL);
+            int gs = run.glyph_start, ge = gs + run.glyph_count;
+            for (int i = gs; i < ge; i++) {
+                float origin = blob->positions_x[i];
+                float adv = blob->advances ? blob->advances[i] : 0.0f;
+                int cs = blob->cluster_indices[i];
+                int ce = cevg_cluster_end_in_run(blob, r, cs);
+                float lead_x  = rtl ? (origin + adv) : origin;          /* cluster START side */
+                float trail_x = rtl ? origin         : (origin + adv);  /* cluster END   side */
+                consider(lead_x,  cs);
+                consider(trail_x, ce);
             }
-            return blob->cluster_indices[i];
         }
     }
+    return best_byte;
+}
 
-    /* Past all glyphs → end-of-line cursor */
-    return (int)blob->text_len;
+/* Resolved paragraph base direction (LTR/RTL) used by the shaper. For Auto this
+ * is decided by the first strong character, not by the first visual run. Useful
+ * for text alignment and for placing the cursor at string ends in BiDi text. */
+extern "C" CevgTextDirection cevg_text_blob_get_paragraph_direction(const CevgTextBlob* blob) {
+    if (!blob) return kCevgDir_LTR;
+    return blob->para_dir;
 }
 
 /* ---- New text-editor APIs ---- */
