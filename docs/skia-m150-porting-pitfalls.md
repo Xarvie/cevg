@@ -137,6 +137,98 @@ target_link_options(cevg PRIVATE "SHELL:-Wl,--version-script=${CMAKE_SOURCE_DIR}
 
 ---
 
+## 11. SkTextBlob::bounds() 不是笔进宽度（严重 — 文字测量偏大 30%+）
+
+**现象**：`cevg_text_blob_get_width` 返回的宽度比实际笔进宽大约 30%。例如 "MMM" 64px 返回 224.78，而真实笔进宽仅 165.00。末位字形 advance 异常膨胀（同一个 M，末位=35.9、内部=17）。
+
+**根因**：`SkTextBlob::bounds()` 返回的是**保守墨迹包围盒**——它取字体中所有字形的全局极值（最大左侧轴承、最大右侧延伸），保证"任何字形的墨迹都不会超出此框"。这不是排版宽度（pen-advance width）。用它当宽度会导致：
+- 宽度偏大 30%+
+- 末位字形 advance 被迫吸收全部过量（`width - positions_x[last]`）
+- 换行/省略/光标定位全部不准
+
+**修复**：用 `max(glyph_origin + its_advance)` 计算笔进宽。advance 从 `SkFont::getWidths` 逐 run 取真实值，而非从位置差重建：
+```cpp
+// 在 CevgRunHandler::commitRunBuffer 中收集真实 advance
+if (info.glyphCount > 0) {
+    std::vector<SkScalar> adv(info.glyphCount);
+    info.fFont.getWidths(
+        SkSpan<const SkGlyphID>{fCurrentBuffer.glyphs, (size_t)info.glyphCount},
+        SkSpan<SkScalar>{adv.data(), (size_t)info.glyphCount});
+    for (int i = 0; i < info.glyphCount; ++i)
+        fResult->advances.push_back(adv[i]);
+}
+
+// 在 cevg_shape_text 中计算笔进宽
+float w = 0.0f;
+for (size_t i = 0; i < result->positions.size(); ++i) {
+    float adv = (i < result->advances.size()) ? result->advances[i] : 0.0f;
+    w = std::max(w, result->positions[i].x() + adv);
+}
+result->shapedWidth = w;
+```
+
+**注意**：`bounds()` 仍然有用——它是保守墨迹盒，适合碰撞检测。通过 `cevg_text_blob_get_ink_bounds` 单独暴露。
+
+---
+
+## 12. SkFont::getWidths API 在 m150 中改为 SkSpan（编译失败）
+
+**现象**：调用 `info.fFont.getWidths(glyphs, count, widths)` 编译失败，提示 `no matching function`。
+
+**根因**：m150 的 `SkFont::getWidths` 签名从旧版 3-arg `(const SkGlyphID*, int, float*)` 改为 2-arg `SkSpan` 版本：
+```cpp
+void getWidths(SkSpan<const SkGlyphID> glyphs, SkSpan<SkScalar> widths) const;
+```
+
+**修复**：
+```cpp
+info.fFont.getWidths(
+    SkSpan<const SkGlyphID>{fCurrentBuffer.glyphs, (size_t)info.glyphCount},
+    SkSpan<SkScalar>{adv.data(), (size_t)info.glyphCount});
+```
+
+---
+
+## 13. hit_test 末位字形右半边应返回 text_len（光标定位 bug）
+
+**现象**：点击最后一个字形的右半边，hit_test 返回该字形的 cluster 值而非 text_len（行尾偏移），导致无法在行尾放置光标。
+
+**根因**：原实现中 `if (x > mid && i + 1 < glyph_count)` 对最后一个字形短路——`i + 1 < glyph_count` 为 false，右半边也返回 `cluster[i]`。
+
+**修复**：
+```cpp
+if (x > mid) {
+    if (i + 1 < blob->glyph_count)
+        return blob->cluster_indices[i + 1];
+    else
+        return (int)blob->text_len;  // EOL cursor
+}
+```
+
+同时需在 `CevgTextBlob_` 中添加 `text_len` 字段，在 `cevg_blob_from_result` 时填入源串字节长度。
+
+---
+
+## 14. advance 不应从位置差重建（末位膨胀 + BiDi 不可靠）
+
+**现象**：末位字形 advance = `width - positions_x[last]`，继承了 width 的偏大。跨 BiDi run 边界时视觉序位置会跳，位置差也不可靠。
+
+**根因**：用 `positions_x[i+1] - positions_x[i]` 重建 advance 是错误的——positions 包含 kerning/GPOS 调整，而 advance 是字形的名义步进宽度。两者是不同的概念。
+
+**修复**：从 `SkFont::getWidths` 逐 run 取真实 advance（见 #11），直接拷贝到 blob 中，不再从位置差重建。
+
+---
+
+## 15. SkTextBlobBuilderRunHandler offset 决定基线约定（零开销修复）
+
+**现象**：`draw_text_blob(x, y)` 中 y 被当作文本顶部而非基线，与 Skia 标准约定不一致。
+
+**根因**：`SkTextBlobBuilderRunHandler` 初始化时 offset 传了 `{0, 0}`，但 `commitRunInfo()` 内部会做 `fCurrentPosition.fY -= fMaxRunAscent`，把 |ascent| 嵌入了字形位置。结果 blob 坐标从 ascent 线开始而非基线。
+
+**修复**：传 `{0, fm.fAscent}` 作为 handler offset（ascent 为负数），与 `commitRunInfo` 的偏移相消，使 blob 坐标基线相对。零运行时开销。
+
+---
+
 ## 移植检查清单
 
 - [ ] 对照 Skia GN `defines` 列表，确保所有 ICU/HarfBuzz/FontConfig 宏一致
@@ -147,3 +239,9 @@ target_link_options(cevg PRIVATE "SHELL:-Wl,--version-script=${CMAKE_SOURCE_DIR}
 - [ ] `ICU_VERSION` 与 `uvernum.h` 一致
 - [ ] 自定义 RunHandler 的 buffer 必须与内部 handler 共享
 - [ ] expat 编译定义与 Skia GN 一致
+- [ ] `SkTextBlob::bounds()` 不能当宽度用——它是保守墨迹盒
+- [ ] `SkFont::getWidths` 在 m150 中是 SkSpan 2-arg 版本
+- [ ] advance 从 `SkFont::getWidths` 取，不从位置差重建
+- [ ] RunHandler offset 传 `{0, ascent}` 使 blob 坐标基线相对
+- [ ] hit_test 末位右半边返回 `text_len`（行尾光标）
+- [ ] `CevgTextBlob_` 需存 `text_len` 和 `advances` 字段

@@ -66,6 +66,21 @@ Text is shaped via HarfBuzz with ICU Unicode support:
   on Windows
 - **TTC support**: `cevg_typeface_create_from_file(path, ttc_index)` — pass
   `ttc_index=0` for regular fonts, higher indices for TTC/OTC collections
+- **Baseline convention**: `draw_text_blob(x, y)` treats y as the baseline
+  (Skia standard), not the top of the text
+- **Width measurement**: `cevg_text_blob_get_width` returns the pen-advance
+  width (where the pen rests after the last glyph), computed as
+  `max(glyph_origin + advance)`. This is the correct typographic width for
+  line-breaking and layout — not `SkTextBlob::bounds()`, which returns a
+  conservative ink bounding box that can be 30%+ wider
+- **Per-glyph advances**: `cevg_text_blob_get_glyph_advances` returns real
+  advance widths from `SkFont::getWidths` per run, not reconstructed from
+  position differences. Last glyph advance is correct (not inflated)
+- **Ink bounds**: `cevg_text_blob_get_ink_bounds` exposes the conservative ink
+  bounding box separately — useful for collision detection, not for layout
+- **Hit testing**: `cevg_text_blob_hit_test` uses advance-based half-cell logic
+  for cursor positioning. Returns UTF-8 byte offset; past the last glyph
+  returns `text_len` for end-of-line cursor
 
 ```c
 CevgTypeface* face = cevg_typeface_create_from_file("/path/to/font.ttf", 0);
@@ -190,7 +205,8 @@ cevg/
 ├── src/cevg_skia_graphite.cpp   # Backend implementation (~3300 lines)
 ├── tests/
 │   ├── test_cevg_render.c       # 144-test rendering suite
-│   └── test_cevg_overlap.c      # 144-test compositing suite
+│   ├── test_cevg_overlap.c      # 144-test compositing suite
+│   └── test_text_measure.c      # Text measurement verification (visual)
 ├── third/skia/
 │   ├── CMakeLists.txt           # Skia + deps build
 │   ├── skia-m150/               # Skia source

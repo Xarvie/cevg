@@ -83,3 +83,28 @@ set_target_properties(test_cevg_render PROPERTIES
 if(MSVC)
     target_compile_options(test_cevg_render PRIVATE /experimental:c11atomics)
 endif()
+
+# ---- test_text_measure ----
+add_executable(test_text_measure
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_text_measure.c"
+    ${HARNESS_SOURCES}
+    ${CEVG_TEST_SOURCES}
+)
+target_include_directories(test_text_measure PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CEVG_GLAD_INCLUDE}"
+)
+target_link_libraries(test_text_measure PRIVATE cevg $<$<PLATFORM_ID:Linux>:m>)
+if(CEVG_VULKAN)
+    target_compile_definitions(test_text_measure PRIVATE CEVG_VULKAN)
+endif()
+set_target_properties(test_text_measure PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY         "${CEVG_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CEVG_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${CEVG_OUTPUT_DIR}"
+)
+if(MSVC)
+    target_compile_options(test_text_measure PRIVATE /experimental:c11atomics)
+endif()

@@ -3040,9 +3040,12 @@ extern "C" int cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float 
         if (x < right || i == blob->glyph_count - 1) {
             /* x is within or past this glyph's advance cell */
             float mid = origin + adv * 0.5f;
-            if (x > mid && i + 1 < blob->glyph_count) {
+            if (x > mid) {
                 /* Right half → cursor after this glyph */
-                return blob->cluster_indices[i + 1];
+                if (i + 1 < blob->glyph_count)
+                    return blob->cluster_indices[i + 1];
+                else
+                    return (int)blob->text_len;  /* EOL cursor */
             }
             return blob->cluster_indices[i];
         }

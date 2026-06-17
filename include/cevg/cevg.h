@@ -737,13 +737,13 @@ CEVG_API void          cevg_typeface_get_metrics(const CevgTypeface* typeface, f
 CEVG_API CevgTextBlob* cevg_text_blob_make(const char* text, size_t len, const CevgTypeface* typeface, float size, CevgTextDirection dir);
 CEVG_API CevgTextBlob* cevg_text_blob_make_ex(const char* text, size_t len, const CevgTypeface* typeface, float size, CevgTextDirection dir, const CevgTypeface** fallbacks, int fallback_count);
 CEVG_API void          cevg_text_blob_destroy(CevgTextBlob* blob);
-CEVG_API float         cevg_text_blob_get_width(const CevgTextBlob* blob);   /* layout width: x=0 to rightmost pixel edge (includes last glyph advance) */
+CEVG_API float         cevg_text_blob_get_width(const CevgTextBlob* blob);   /* pen-advance width: max(glyph_origin + advance); where the pen rests after the last glyph */
 CEVG_API float         cevg_text_blob_get_height(const CevgTextBlob* blob);  /* line height: |ascent| + descent (no leading) */
 CEVG_API int           cevg_text_blob_get_glyph_count(const CevgTextBlob* blob);
 CEVG_API void          cevg_text_blob_get_glyph_positions(const CevgTextBlob* blob, float* out_x, float* out_y);  /* out_x/y must hold glyph_count floats; positions are baseline-relative */
 CEVG_API void          cevg_text_blob_get_cluster_info(const CevgTextBlob* blob, int* char_indices);  /* out must hold glyph_count ints; each is a UTF-8 byte offset */
-CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* advance-based hit test; returns UTF-8 byte offset for cursor position, or text_len for end-of-line */
-CEVG_API void          cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, float* out_advances);
+CEVG_API int           cevg_text_blob_hit_test(const CevgTextBlob* blob, float x, float y);  /* advance-based hit test; x/y in blob-local coords (positions_x range); returns UTF-8 byte offset, or text_len for end-of-line */
+CEVG_API void          cevg_text_blob_get_glyph_advances(const CevgTextBlob* blob, float* out_advances);  /* per-glyph advance widths from font metrics (SkFont::getWidths); out must hold glyph_count floats */
 CEVG_API void          cevg_text_blob_get_ink_bounds(const CevgTextBlob* blob, float out[4]);  /* conservative ink bounding box: {left, top, width, height}; may exceed advance width */
 CEVG_API int           cevg_text_blob_get_run_count(const CevgTextBlob* blob);
 /* Fill an array of run records. `out_runs` points to `count` records each
