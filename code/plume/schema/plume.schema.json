@@ -1,0 +1,2726 @@
+{
+  "$schema_version": "0.1",
+  "$comment": "Plume 单一 schema/IDL —— 控件与模块属性的真相源（single source of truth）。模块属性 id 由本表【确定性分配】：按 module_props 出现顺序自 module_base+1 起递增。顺序是 append-only 的 ABI 账本——新属性只在末尾追加、永不重排/插入，故已分配 id 永不变（与冻结契约 §2 一致）。核心属性（Width/Height/Background/.../Portal/ZIndex/OverlayX/OverlayY）定义在冻结头 plume_kernel.h 的 kPlProp 枚举里，不在此分配；本 schema 只管【模块属性】的分配与各控件的属性归属、运行时自省元数据、以及各控件的 L1 typed 构造器（widget 的 l1 字段，规则控件由此生成 desc+构造器+宏；不规则者暂手写于 pl_ui.c）。由 tools/gen_schema.py 生成 C 头/表/L1（src/schema/plume_schema_gen.{h,c}、include/plume/plume_ui_gen.h、src/dsl/pl_ui_gen.c）。",
+  "module_base": 4096,
+  "widgets": [
+    {
+      "type": "pl.Box",
+      "kind": "render",
+      "doc": "盒：单子容器（尺寸/内边距/背景/圆角/边框/裁剪/min-max/grow-shrink）",
+      "l1": [
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=未设(自动按内容)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "0=未设(自动按内容)"
+        },
+        {
+          "field": "min_width",
+          "ctype": "float",
+          "prop": "kPlProp_MinWidth",
+          "set": "len",
+          "doc": "尺寸边界；0=未设"
+        },
+        {
+          "field": "min_height",
+          "ctype": "float",
+          "prop": "kPlProp_MinHeight",
+          "set": "len",
+          "doc": "尺寸边界；0=未设"
+        },
+        {
+          "field": "max_width",
+          "ctype": "float",
+          "prop": "kPlProp_MaxWidth",
+          "set": "len",
+          "doc": "尺寸边界；0=未设"
+        },
+        {
+          "field": "max_height",
+          "ctype": "float",
+          "prop": "kPlProp_MaxHeight",
+          "set": "len",
+          "doc": "尺寸边界；0=未设"
+        },
+        {
+          "field": "bg",
+          "ctype": "PlColor",
+          "prop": "kPlProp_Background",
+          "set": "color",
+          "doc": "0xRRGGBBAA；0=未设(透明)"
+        },
+        {
+          "field": "radius",
+          "ctype": "float",
+          "prop": "kPlProp_Radius",
+          "set": "f",
+          "doc": "0=未设(直角)"
+        },
+        {
+          "field": "clip",
+          "ctype": "bool",
+          "prop": "kPlProp_Clip",
+          "set": "bool",
+          "doc": "裁剪溢出子(含圆角)；默认 false"
+        },
+        {
+          "field": "padding",
+          "ctype": "float",
+          "prop": "kPlProp_Padding",
+          "set": "edge",
+          "doc": "统一内边距；0=未设(无)"
+        },
+        {
+          "field": "border_color",
+          "ctype": "PlColor",
+          "prop": "kPlProp_BorderColor",
+          "set": "color",
+          "guard": "d.border_width != 0 && d.border_color != 0",
+          "doc": "边框色（仅 border_width 设时生效）"
+        },
+        {
+          "field": "border_width",
+          "ctype": "float",
+          "prop": "kPlProp_BorderWidth",
+          "set": "f",
+          "doc": "0=未设(无边框)"
+        },
+        {
+          "field": "opacity",
+          "ctype": "float",
+          "prop": "kPlProp_Opacity",
+          "set": "f",
+          "doc": "0=未设(=1)"
+        },
+        {
+          "field": "grow",
+          "ctype": "float",
+          "prop": "kPlProp_Grow",
+          "set": "f",
+          "doc": "flex 主轴 grow；0=未设"
+        },
+        {
+          "field": "shrink",
+          "ctype": "float",
+          "prop": "kPlProp_Shrink",
+          "set": "f",
+          "doc": "flex 主轴 shrink；0=未设(不收缩)"
+        },
+        {
+          "field": "on_tap",
+          "ctype": "PlHandler",
+          "prop": "kPlEv_Tap",
+          "set": "on",
+          "doc": "点击处理器；NULL=无"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "",
+          "set": "child",
+          "doc": "可选单子"
+        }
+      ]
+    },
+    {
+      "type": "pl.Row",
+      "kind": "render",
+      "doc": "水平 flex",
+      "l1": [
+        {
+          "field": "gap",
+          "ctype": "float",
+          "prop": "kPlProp_Gap",
+          "set": "f",
+          "doc": "项目间距；0=未设(默认 8)"
+        },
+        {
+          "field": "justify",
+          "ctype": "int",
+          "prop": "kPlProp_Justify",
+          "set": "enum",
+          "doc": "主轴对齐 kPlJustify_*"
+        },
+        {
+          "field": "align",
+          "ctype": "int",
+          "prop": "kPlProp_Align",
+          "set": "enum",
+          "doc": "交叉轴对齐 kPlAlign_*"
+        },
+        {
+          "field": "children",
+          "ctype": "children",
+          "prop": "",
+          "set": "children",
+          "doc": "子项（顺序填，遇 NULL 止）"
+        }
+      ]
+    },
+    {
+      "type": "pl.Column",
+      "kind": "render",
+      "doc": "竖直 flex",
+      "l1": [
+        {
+          "field": "gap",
+          "ctype": "float",
+          "prop": "kPlProp_Gap",
+          "set": "f",
+          "doc": "项目间距；0=未设(默认 12)"
+        },
+        {
+          "field": "justify",
+          "ctype": "int",
+          "prop": "kPlProp_Justify",
+          "set": "enum",
+          "doc": "主轴对齐 kPlJustify_*"
+        },
+        {
+          "field": "align",
+          "ctype": "int",
+          "prop": "kPlProp_Align",
+          "set": "enum",
+          "doc": "交叉轴对齐 kPlAlign_*"
+        },
+        {
+          "field": "children",
+          "ctype": "children",
+          "prop": "",
+          "set": "children",
+          "doc": "子项（顺序填，遇 NULL 止）"
+        }
+      ]
+    },
+    {
+      "type": "pl.Stack",
+      "kind": "render",
+      "doc": "重叠分层（z 序=子序）",
+      "l1": [
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=未设(子最大)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "0=未设(子最大)"
+        },
+        {
+          "field": "justify",
+          "ctype": "int",
+          "prop": "kPlProp_Justify",
+          "set": "enum",
+          "doc": "水平对齐 kPlJustify_Start/Center/End"
+        },
+        {
+          "field": "align",
+          "ctype": "int",
+          "prop": "kPlProp_Align",
+          "set": "enum",
+          "doc": "竖直对齐 kPlAlign_Start/Center/End"
+        },
+        {
+          "field": "children",
+          "ctype": "children",
+          "prop": "",
+          "set": "children",
+          "doc": "子项（先者在底，遇 NULL 止）"
+        }
+      ]
+    },
+    {
+      "type": "pl.Portal",
+      "kind": "render",
+      "doc": "顶层浮层：子树传送到根坐标最上层，逃逸祖先 transform/clip/opacity",
+      "setup": [
+        {
+          "set": "bool",
+          "prop": "kPlProp_Portal",
+          "value": "true"
+        }
+      ],
+      "l1": [
+        {
+          "field": "x",
+          "ctype": "float",
+          "prop": "kPlProp_OverlayX",
+          "set": "f",
+          "doc": "放置 x（根坐标；anchor 时为相对容器偏移）；0=左上/原位"
+        },
+        {
+          "field": "y",
+          "ctype": "float",
+          "prop": "kPlProp_OverlayY",
+          "set": "f",
+          "doc": "放置 y（根坐标；anchor 时为相对容器偏移）；0=左上/原位"
+        },
+        {
+          "field": "z",
+          "ctype": "int",
+          "prop": "kPlProp_ZIndex",
+          "set": "i",
+          "doc": "层叠序（大者在上）；0=默认"
+        },
+        {
+          "field": "anchor",
+          "ctype": "bool",
+          "prop": "kPlProp_OverlayAnchor",
+          "set": "bool",
+          "doc": "锚定：x/y 改作相对偏移，基准=portal 所在容器布局后位置（浮层随触发处移动）"
+        },
+        {
+          "field": "flip",
+          "ctype": "bool",
+          "prop": "kPlProp_OverlayFlip",
+          "set": "bool",
+          "doc": "边界翻转（仅锚定）：默认下方会溢出视口底边且上方放得下时，自动翻到触发处上方"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "",
+          "set": "child",
+          "doc": "浮层内容"
+        }
+      ]
+    },
+    {
+      "type": "pl.Text",
+      "kind": "render",
+      "doc": "文本（cevg 排版；省略号/换行）",
+      "l1": [
+        {
+          "field": "text",
+          "ctype": "const char*",
+          "prop": "kPlProp_Text",
+          "set": "str",
+          "doc": "文本（拷贝）"
+        },
+        {
+          "field": "size",
+          "ctype": "float",
+          "prop": "kPlProp_FontSize",
+          "set": "f",
+          "doc": "字号；0=未设(16)"
+        },
+        {
+          "field": "color",
+          "ctype": "PlColor",
+          "prop": "kPlProp_Color",
+          "set": "color",
+          "doc": "0xRRGGBBAA 或 pl_hex；0=未设(黑)"
+        },
+        {
+          "field": "grow",
+          "ctype": "float",
+          "prop": "kPlProp_Grow",
+          "set": "f",
+          "doc": "flex grow"
+        },
+        {
+          "field": "ellipsis",
+          "ctype": "bool",
+          "prop": "kPlPropText_Ellipsis",
+          "set": "bool",
+          "doc": "放不下尾部省略号"
+        },
+        {
+          "field": "wrap",
+          "ctype": "bool",
+          "prop": "kPlPropText_Wrap",
+          "set": "bool",
+          "doc": "超宽按词换行"
+        },
+        {
+          "field": "dir",
+          "ctype": "int",
+          "prop": "kPlPropText_Dir",
+          "set": "enum",
+          "doc": "文本方向 kPlDir_Auto/LTR/RTL"
+        }
+      ]
+    },
+    {
+      "type": "pl.Image",
+      "kind": "render",
+      "doc": "位图（缩放 + 圆角裁剪）",
+      "l1": [
+        {
+          "field": "src",
+          "ctype": "CevgImage*",
+          "prop": "kPlPropImage_Src",
+          "set": "ptr",
+          "doc": "图像（宿主持有生命周期）"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=未设(图像自然尺寸)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "0=未设(图像自然尺寸)"
+        },
+        {
+          "field": "radius",
+          "ctype": "float",
+          "prop": "kPlProp_Radius",
+          "set": "f",
+          "doc": "圆角裁剪；0=未设(方角)"
+        },
+        {
+          "field": "grow",
+          "ctype": "float",
+          "prop": "kPlProp_Grow",
+          "set": "f",
+          "doc": "flex grow"
+        }
+      ]
+    },
+    {
+      "type": "pl.Button",
+      "kind": "composite",
+      "doc": "按钮（按下态 + on_press 动作）",
+      "l1": [
+        {
+          "field": "label",
+          "ctype": "const char*",
+          "prop": "kPlProp_Text",
+          "set": "str",
+          "doc": "按钮文字"
+        },
+        {
+          "field": "bg",
+          "ctype": "PlColor",
+          "prop": "kPlProp_Background",
+          "set": "color",
+          "doc": "底色；0=未设(默认蓝)"
+        },
+        {
+          "field": "color",
+          "ctype": "PlColor",
+          "prop": "kPlProp_Color",
+          "set": "color",
+          "doc": "文字色；0=未设(默认白)"
+        },
+        {
+          "field": "radius",
+          "ctype": "float",
+          "prop": "kPlProp_Radius",
+          "set": "f",
+          "doc": "圆角；0=未设(10)"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=未设(按内容)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "0=未设(按内容)"
+        },
+        {
+          "field": "font_size",
+          "ctype": "float",
+          "prop": "kPlProp_FontSize",
+          "set": "f",
+          "doc": "0=未设(20)"
+        },
+        {
+          "field": "on_press",
+          "ctype": "PlHandler",
+          "prop": "kPlPropButton_OnPress",
+          "set": "ptr",
+          "doc": "点击动作"
+        }
+      ]
+    },
+    {
+      "type": "pl.Spacer",
+      "kind": "render",
+      "doc": "弹性空白（grow=1）",
+      "setup": [
+        {
+          "set": "f",
+          "prop": "kPlProp_Grow",
+          "value": "1.0f"
+        }
+      ]
+    },
+    {
+      "type": "pl.Divider",
+      "kind": "render",
+      "doc": "分隔线（横/竖）",
+      "l1": [
+        {
+          "field": "color",
+          "ctype": "PlColor",
+          "prop": "kPlProp_Color",
+          "set": "color",
+          "doc": "线色；0=未设(浅灰)"
+        },
+        {
+          "field": "thickness",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "厚度；0=未设(1)"
+        },
+        {
+          "field": "vertical",
+          "ctype": "bool",
+          "prop": "kPlPropDivider_Vertical",
+          "set": "bool",
+          "doc": "竖向（填高×厚）"
+        }
+      ]
+    },
+    {
+      "type": "pl.Scroll",
+      "kind": "render",
+      "doc": "滚动视口（裁剪 + 偏移 + 滚动条）",
+      "setup": [
+        {
+          "set": "bool",
+          "prop": "kPlProp_Clip",
+          "value": "true"
+        }
+      ],
+      "l1": [
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "视口宽；0=未设(按约束)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "视口高；0=未设(按约束)"
+        },
+        {
+          "field": "scroll",
+          "ctype": "float",
+          "prop": "kPlPropScroll_Y",
+          "set": "f",
+          "always": true,
+          "doc": "竖直滚动偏移（内容上移量）"
+        },
+        {
+          "field": "scroll_x",
+          "ctype": "float",
+          "prop": "kPlPropScroll_X",
+          "set": "f",
+          "doc": "水平滚动偏移（内容左移量）；0=未设"
+        },
+        {
+          "field": "scrollbar",
+          "ctype": "bool",
+          "prop": "kPlPropScroll_Bar",
+          "set": "bool",
+          "doc": "显示滚动条指示器（双轴：内容溢出哪轴显哪轴）"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "",
+          "set": "child",
+          "doc": "内容（可比视口高）"
+        }
+      ]
+    },
+    {
+      "type": "pl.Grid",
+      "kind": "render",
+      "doc": "N 列网格（等宽/自适应列宽 + 行高 minmax）",
+      "l1": [
+        {
+          "field": "cols",
+          "ctype": "int",
+          "prop": "kPlPropGrid_Cols",
+          "set": "i",
+          "doc": "列数；0=未设(默认 2)"
+        },
+        {
+          "field": "gap",
+          "ctype": "float",
+          "prop": "kPlProp_Gap",
+          "set": "f",
+          "doc": "项目间距；0=未设"
+        },
+        {
+          "field": "autofit",
+          "ctype": "int",
+          "prop": "kPlPropGrid_Auto",
+          "set": "i",
+          "doc": "列宽按内容自适应；0=未设(等宽)"
+        },
+        {
+          "field": "min_w",
+          "ctype": "float",
+          "prop": "kPlPropGrid_MinW",
+          "set": "f",
+          "doc": "自适应时每列最小宽"
+        },
+        {
+          "field": "max_w",
+          "ctype": "float",
+          "prop": "kPlPropGrid_MaxW",
+          "set": "f",
+          "doc": "自适应时每列最大宽(0=不封顶)"
+        },
+        {
+          "field": "min_h",
+          "ctype": "float",
+          "prop": "kPlPropGrid_MinH",
+          "set": "f",
+          "doc": "每行最小高(0=不保底)"
+        },
+        {
+          "field": "max_h",
+          "ctype": "float",
+          "prop": "kPlPropGrid_MaxH",
+          "set": "f",
+          "doc": "每行最大高(0=不封顶)"
+        },
+        {
+          "field": "children",
+          "ctype": "children",
+          "prop": "",
+          "set": "children",
+          "doc": "子项（顺序填，遇 NULL 止）"
+        }
+      ]
+    },
+    {
+      "type": "pl.Input",
+      "doc": "单行文本输入框（含光标、聚焦环、placeholder、密码模式）",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "str",
+          "prop": "kPlPropInput_Value",
+          "set": "str",
+          "doc": "当前值（受控）；NULL=无"
+        },
+        {
+          "field": "placeholder",
+          "ctype": "str",
+          "prop": "kPlPropInput_Placeholder",
+          "set": "str",
+          "doc": "空值时的占位文字"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropInput_OnChange",
+          "set": "ptr",
+          "doc": "值变化回调；pl_event_text=新值"
+        },
+        {
+          "field": "on_submit",
+          "ctype": "PlHandler",
+          "prop": "kPlPropInput_OnSubmit",
+          "set": "ptr",
+          "doc": "Enter 提交回调"
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropInput_Disabled",
+          "set": "bool",
+          "doc": "禁用态"
+        },
+        {
+          "field": "password",
+          "ctype": "bool",
+          "prop": "kPlPropInput_Password",
+          "set": "bool",
+          "doc": "密码模式（• 遮盖）"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=未设(自动)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "0=未设(自动)"
+        }
+      ],
+      "kind": "composite"
+    },
+    {
+      "type": "pl.TextArea",
+      "doc": "多行文本编辑框（光标/换行/上下行导航/BiDi 双向文本）",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "str",
+          "prop": "kPlPropTextArea_Value",
+          "set": "str",
+          "doc": "当前值（受控，可含 \\n）；NULL=无"
+        },
+        {
+          "field": "placeholder",
+          "ctype": "str",
+          "prop": "kPlPropTextArea_Placeholder",
+          "set": "str",
+          "doc": "空值时的占位文字"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropTextArea_OnChange",
+          "set": "ptr",
+          "doc": "值变化回调；pl_event_text=新值"
+        },
+        {
+          "field": "rows",
+          "ctype": "int",
+          "prop": "kPlPropTextArea_Rows",
+          "set": "enum",
+          "doc": "可见行数（决定默认高度）；0=未设(4)"
+        },
+        {
+          "field": "dir",
+          "ctype": "int",
+          "prop": "kPlPropTextArea_Dir",
+          "set": "enum",
+          "doc": "文本方向 kPlDir_Auto/LTR/RTL"
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropTextArea_Disabled",
+          "set": "bool",
+          "doc": "禁用态"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=未设(自动)"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlProp_Height",
+          "set": "len",
+          "doc": "0=未设(按 rows)"
+        }
+      ],
+      "kind": "composite"
+    },
+    {
+      "type": "pl.Checkbox",
+      "doc": "复选框（勾选/取消，含对勾动画）",
+      "l1": [
+        {
+          "field": "checked",
+          "ctype": "bool",
+          "prop": "kPlPropCheckbox_Checked",
+          "set": "bool",
+          "doc": "勾选状态"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropCheckbox_OnChange",
+          "set": "ptr",
+          "doc": "切换回调；pl_event_text=\\\"1\\\"/\\\"0\\\""
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropCheckbox_Disabled",
+          "set": "bool",
+          "doc": "禁用态"
+        }
+      ],
+      "kind": "composite"
+    },
+    {
+      "type": "pl.Switch",
+      "doc": "开关/切换（knob 动画 + 轨道色过渡）",
+      "l1": [
+        {
+          "field": "on",
+          "ctype": "bool",
+          "prop": "kPlPropSwitch_On",
+          "set": "bool",
+          "doc": "开关状态"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSwitch_OnChange",
+          "set": "ptr",
+          "doc": "切换回调；pl_event_text=\\\"1\\\"/\\\"0\\\""
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropSwitch_Disabled",
+          "set": "bool",
+          "doc": "禁用态"
+        }
+      ],
+      "kind": "composite"
+    },
+    {
+      "type": "pl.Slider",
+      "doc": "水平滑块（0–1 范围，可拖拽）",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "float",
+          "prop": "kPlPropSlider_Value",
+          "set": "f",
+          "doc": "当前值 0.0–1.0"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSlider_OnChange",
+          "set": "ptr",
+          "doc": "拖动回调；pl_event_text=\\\"0.0000\\\"–\\\"1.0000\\\""
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropSlider_Disabled",
+          "set": "bool",
+          "doc": "禁用态"
+        }
+      ],
+      "kind": "composite"
+    },
+    {
+      "type": "pl.Select",
+      "doc": "下拉选择（含分组/禁用/键盘导航，portal 浮层）",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "int",
+          "prop": "kPlPropSelect_Value",
+          "set": "i",
+          "doc": "选中项索引（-1=未选）"
+        },
+        {
+          "field": "placeholder",
+          "ctype": "str",
+          "prop": "kPlPropSelect_Placeholder",
+          "set": "str",
+          "doc": "未选中时的提示文字"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSelect_OnChange",
+          "set": "ptr",
+          "doc": "选中变化回调"
+        },
+        {
+          "field": "options",
+          "ctype": "ptr",
+          "prop": "kPlPropSelect_Options",
+          "set": "ptr",
+          "doc": "const char**"
+        },
+        {
+          "field": "option_count",
+          "ctype": "int",
+          "prop": "kPlPropSelect_OptionCount",
+          "set": "i",
+          "doc": "选项数"
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropSelect_Disabled",
+          "set": "bool",
+          "doc": "禁用"
+        }
+      ],
+      "kind": "composite"
+    },
+    {
+      "type": "pl.Progress",
+      "doc": "进度条（确定/不确定两种模式）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "float",
+          "prop": "kPlPropProgress_Value",
+          "set": "f",
+          "doc": "0.0–1.0；< 0 = spinner"
+        },
+        {
+          "field": "thickness",
+          "ctype": "float",
+          "prop": "kPlPropProgress_Thickness",
+          "set": "f",
+          "doc": "0=默认 6px"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlProp_Width",
+          "set": "len",
+          "doc": "0=自动"
+        }
+      ]
+    },
+    {
+      "type": "pl.Modal",
+      "doc": "模态遮罩层（portal 顶层）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "open",
+          "ctype": "bool",
+          "prop": "kPlPropModal_Open",
+          "set": "bool",
+          "doc": "是否显示"
+        },
+        {
+          "field": "on_close",
+          "ctype": "PlHandler",
+          "prop": "kPlPropModal_OnClose",
+          "set": "ptr",
+          "doc": "关闭回调"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "kPlPropModal_Child",
+          "set": "ptr",
+          "doc": "内容"
+        }
+      ]
+    },
+    {
+      "type": "pl.Tooltip",
+      "doc": "提示气泡（hover 延迟出现）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "content",
+          "ctype": "str",
+          "prop": "kPlPropTooltip_Content",
+          "set": "str",
+          "doc": "提示文字"
+        },
+        {
+          "field": "delay",
+          "ctype": "float",
+          "prop": "kPlPropTooltip_Delay",
+          "set": "f",
+          "doc": "0=默认 0.3s"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "kPlPropTooltip_ChildNode",
+          "set": "ptr",
+          "doc": "触发元素"
+        }
+      ]
+    },
+    {
+      "type": "pl.Radio",
+      "doc": "单选按钮",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "checked",
+          "ctype": "bool",
+          "prop": "kPlPropRadio_Checked",
+          "set": "bool",
+          "doc": "选中"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropRadio_OnChange",
+          "set": "ptr",
+          "doc": "点击回调"
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropRadio_Disabled",
+          "set": "bool",
+          "doc": "禁用"
+        }
+      ]
+    },
+    {
+      "type": "pl.Badge",
+      "doc": "数字徽章（叠加在子元素右上角）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "count",
+          "ctype": "int",
+          "prop": "kPlPropBadge_Count",
+          "set": "i",
+          "doc": "数字；0=隐藏"
+        },
+        {
+          "field": "content",
+          "ctype": "str",
+          "prop": "kPlPropBadge_Content",
+          "set": "str",
+          "doc": "文字（优先）"
+        },
+        {
+          "field": "color",
+          "ctype": "PlColor",
+          "prop": "kPlPropBadge_Color",
+          "set": "color",
+          "doc": "0=红"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "kPlPropBadge_ChildNode",
+          "set": "ptr",
+          "doc": "被标注的内容"
+        }
+      ]
+    },
+    {
+      "type": "pl.Chip",
+      "doc": "标签/Chip（可选中、可删除）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "label",
+          "ctype": "str",
+          "prop": "kPlPropChip_Label",
+          "set": "str",
+          "doc": "文字"
+        },
+        {
+          "field": "selected",
+          "ctype": "bool",
+          "prop": "kPlPropChip_Selected",
+          "set": "bool",
+          "doc": "选中高亮"
+        },
+        {
+          "field": "on_tap",
+          "ctype": "PlHandler",
+          "prop": "kPlPropChip_OnTap",
+          "set": "ptr",
+          "doc": "点击"
+        },
+        {
+          "field": "on_remove",
+          "ctype": "PlHandler",
+          "prop": "kPlPropChip_OnRemove",
+          "set": "ptr",
+          "doc": "删除（NULL=不显示×）"
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropChip_Disabled",
+          "set": "bool",
+          "doc": "禁用"
+        }
+      ]
+    },
+    {
+      "type": "pl.Accordion",
+      "doc": "可展开折叠面板",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "title",
+          "ctype": "str",
+          "prop": "kPlPropAccordion_Title",
+          "set": "str",
+          "doc": "标题"
+        },
+        {
+          "field": "open",
+          "ctype": "bool",
+          "prop": "kPlPropAccordion_Open",
+          "set": "bool",
+          "doc": "展开"
+        },
+        {
+          "field": "on_toggle",
+          "ctype": "PlHandler",
+          "prop": "kPlPropAccordion_OnToggle",
+          "set": "ptr",
+          "doc": "点击标题"
+        },
+        {
+          "field": "child",
+          "ctype": "PlNode",
+          "prop": "kPlPropAccordion_ChildNode",
+          "set": "ptr",
+          "doc": "折叠内容"
+        }
+      ]
+    },
+    {
+      "type": "pl.Tabs",
+      "doc": "Tab 切换栏（水平，激活项有下划线/高亮）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "active_index",
+          "ctype": "int",
+          "prop": "kPlPropTabs_ActiveIndex",
+          "set": "i",
+          "doc": "激活索引"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropTabs_OnChange",
+          "set": "ptr",
+          "doc": "切换回调"
+        },
+        {
+          "field": "labels",
+          "ctype": "ptr",
+          "prop": "kPlPropTabs_Labels",
+          "set": "ptr",
+          "doc": "const char**"
+        },
+        {
+          "field": "count",
+          "ctype": "int",
+          "prop": "kPlPropTabs_Count",
+          "set": "i",
+          "doc": "标签数"
+        }
+      ]
+    },
+    {
+      "type": "pl.Avatar",
+      "doc": "圆形头像（图片或首字母缩写）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "initials",
+          "ctype": "str",
+          "prop": "kPlPropAvatar_Initials",
+          "set": "str",
+          "doc": "首字母"
+        },
+        {
+          "field": "color",
+          "ctype": "PlColor",
+          "prop": "kPlPropAvatar_Color",
+          "set": "color",
+          "doc": "0=自动"
+        },
+        {
+          "field": "size",
+          "ctype": "float",
+          "prop": "kPlPropAvatar_Size",
+          "set": "f",
+          "doc": "直径 px"
+        },
+        {
+          "field": "src",
+          "ctype": "ptr",
+          "prop": "kPlPropAvatar_Src",
+          "set": "ptr",
+          "doc": "CevgImage*"
+        }
+      ]
+    },
+    {
+      "type": "pl.List",
+      "doc": "虚拟化等高列表（只渲染可视区域项）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "count",
+          "ctype": "int",
+          "prop": "kPlPropList_Count",
+          "set": "i",
+          "doc": "总项数"
+        },
+        {
+          "field": "item_height",
+          "ctype": "float",
+          "prop": "kPlPropList_ItemHeight",
+          "set": "f",
+          "doc": "等高 px"
+        },
+        {
+          "field": "builder",
+          "ctype": "ptr",
+          "prop": "kPlPropList_Builder",
+          "set": "ptr",
+          "doc": "PlListBuilder"
+        },
+        {
+          "field": "scroll_y",
+          "ctype": "float",
+          "prop": "kPlPropList_ScrollY",
+          "set": "f",
+          "doc": "滚动偏移"
+        },
+        {
+          "field": "on_scroll",
+          "ctype": "ptr",
+          "prop": "kPlPropList_OnScroll",
+          "set": "ptr",
+          "doc": "滚动回调"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlPropList_Height",
+          "set": "f",
+          "doc": "视口高"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlPropList_Width",
+          "set": "f",
+          "doc": "视口宽"
+        }
+      ]
+    },
+    {
+      "type": "pl.Notification",
+      "doc": "Toast 通知条（Portal 顶层，自动消失）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "message",
+          "ctype": "str",
+          "prop": "kPlPropNotification_Message",
+          "set": "str",
+          "doc": "消息文字"
+        },
+        {
+          "field": "duration",
+          "ctype": "float",
+          "prop": "kPlPropNotification_Duration",
+          "set": "f",
+          "doc": "秒；0=不自动消"
+        },
+        {
+          "field": "variant",
+          "ctype": "int",
+          "prop": "kPlPropNotification_Variant",
+          "set": "i",
+          "doc": "0=Info 1=Success 2=Warn 3=Error"
+        },
+        {
+          "field": "on_close",
+          "ctype": "PlHandler",
+          "prop": "kPlPropNotification_OnClose",
+          "set": "ptr",
+          "doc": "消失回调"
+        },
+        {
+          "field": "visible",
+          "ctype": "bool",
+          "prop": "kPlPropNotification_Visible",
+          "set": "bool",
+          "doc": "是否显示"
+        }
+      ]
+    },
+    {
+      "type": "pl.RichText",
+      "doc": "多段 inline 样式文本（bold/color/size 混排）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "spans",
+          "ctype": "ptr",
+          "prop": "kPlPropRichText_Spans",
+          "set": "ptr",
+          "doc": "PlSpan*"
+        },
+        {
+          "field": "span_count",
+          "ctype": "int",
+          "prop": "kPlPropRichText_SpanCount",
+          "set": "i",
+          "doc": "数量"
+        },
+        {
+          "field": "wrap",
+          "ctype": "bool",
+          "prop": "kPlPropRichText_Wrap",
+          "set": "bool",
+          "doc": "换行"
+        }
+      ]
+    },
+    {
+      "type": "pl.Menu",
+      "doc": "右键/弹出菜单（Portal 定位，MenuItem 列表）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "open",
+          "ctype": "bool",
+          "prop": "kPlPropMenu_Open",
+          "set": "bool",
+          "doc": "展开"
+        },
+        {
+          "field": "items",
+          "ctype": "ptr",
+          "prop": "kPlPropMenu_Items",
+          "set": "ptr",
+          "doc": "PlMenuItem*"
+        },
+        {
+          "field": "item_count",
+          "ctype": "int",
+          "prop": "kPlPropMenu_ItemCount",
+          "set": "i",
+          "doc": "数量"
+        },
+        {
+          "field": "on_select",
+          "ctype": "PlHandler",
+          "prop": "kPlPropMenu_OnSelect",
+          "set": "ptr",
+          "doc": "选中回调"
+        },
+        {
+          "field": "x",
+          "ctype": "float",
+          "prop": "kPlPropMenu_X",
+          "set": "f",
+          "doc": "弹出 x"
+        },
+        {
+          "field": "y",
+          "ctype": "float",
+          "prop": "kPlPropMenu_Y",
+          "set": "f",
+          "doc": "弹出 y"
+        }
+      ]
+    },
+    {
+      "type": "pl.Pagination",
+      "doc": "分页控件（< 1 2 3 … N >）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "page",
+          "ctype": "int",
+          "prop": "kPlPropPagination_Page",
+          "set": "i",
+          "doc": "当前页"
+        },
+        {
+          "field": "page_count",
+          "ctype": "int",
+          "prop": "kPlPropPagination_PageCount",
+          "set": "i",
+          "doc": "总页数"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropPagination_OnChange",
+          "set": "ptr",
+          "doc": "切换回调"
+        }
+      ]
+    },
+    {
+      "type": "pl.ColorPicker",
+      "doc": "颜色选择器（HSL 滑块）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "PlColor",
+          "prop": "kPlPropColorPicker_Value",
+          "set": "color",
+          "doc": "颜色"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropColorPicker_OnChange",
+          "set": "ptr",
+          "doc": "回调"
+        }
+      ]
+    },
+    {
+      "type": "pl.DatePicker",
+      "doc": "日期选择器（月历网格）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "year",
+          "ctype": "int",
+          "prop": "kPlPropDatePicker_Year",
+          "set": "i",
+          "doc": "年"
+        },
+        {
+          "field": "month",
+          "ctype": "int",
+          "prop": "kPlPropDatePicker_Month",
+          "set": "i",
+          "doc": "月 1-12"
+        },
+        {
+          "field": "day",
+          "ctype": "int",
+          "prop": "kPlPropDatePicker_Day",
+          "set": "i",
+          "doc": "日 1-31"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropDatePicker_OnChange",
+          "set": "ptr",
+          "doc": "回调"
+        }
+      ]
+    },
+    {
+      "type": "pl.Stepper",
+      "doc": "数字步进器（+/- 按钮 + 值显示）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "int",
+          "prop": "kPlPropStepper_Value",
+          "set": "i",
+          "doc": "当前值"
+        },
+        {
+          "field": "min",
+          "ctype": "int",
+          "prop": "kPlPropStepper_Min",
+          "set": "i",
+          "doc": "最小值"
+        },
+        {
+          "field": "max",
+          "ctype": "int",
+          "prop": "kPlPropStepper_Max",
+          "set": "i",
+          "doc": "最大值"
+        },
+        {
+          "field": "step",
+          "ctype": "int",
+          "prop": "kPlPropStepper_Step",
+          "set": "i",
+          "doc": "步进量"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropStepper_OnChange",
+          "set": "ptr",
+          "doc": "回调"
+        },
+        {
+          "field": "disabled",
+          "ctype": "bool",
+          "prop": "kPlPropStepper_Disabled",
+          "set": "bool",
+          "doc": "禁用"
+        }
+      ]
+    },
+    {
+      "type": "pl.Rating",
+      "doc": "评分星级（可交互/只读）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "int",
+          "prop": "kPlPropRating_Value",
+          "set": "i",
+          "doc": "评分 0-5"
+        },
+        {
+          "field": "max",
+          "ctype": "int",
+          "prop": "kPlPropRating_Max",
+          "set": "i",
+          "doc": "最大星数"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropRating_OnChange",
+          "set": "ptr",
+          "doc": "回调"
+        },
+        {
+          "field": "read_only",
+          "ctype": "bool",
+          "prop": "kPlPropRating_ReadOnly",
+          "set": "bool",
+          "doc": "只读"
+        }
+      ]
+    },
+    {
+      "type": "pl.Timeline",
+      "doc": "时间线（垂直步骤列表）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "items",
+          "ctype": "ptr",
+          "prop": "kPlPropTimeline_Items",
+          "set": "ptr",
+          "doc": "PlTimelineItem*"
+        },
+        {
+          "field": "item_count",
+          "ctype": "int",
+          "prop": "kPlPropTimeline_ItemCount",
+          "set": "i",
+          "doc": "数量"
+        }
+      ]
+    },
+    {
+      "type": "pl.Table",
+      "doc": "数据表格（表头+行，可选中行）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "columns",
+          "ctype": "ptr",
+          "prop": "kPlPropTable_Columns",
+          "set": "ptr",
+          "doc": "PlTableColumn*"
+        },
+        {
+          "field": "column_count",
+          "ctype": "int",
+          "prop": "kPlPropTable_ColumnCount",
+          "set": "i",
+          "doc": "列数"
+        },
+        {
+          "field": "rows",
+          "ctype": "ptr",
+          "prop": "kPlPropTable_Rows",
+          "set": "ptr",
+          "doc": "const char**"
+        },
+        {
+          "field": "row_count",
+          "ctype": "int",
+          "prop": "kPlPropTable_RowCount",
+          "set": "i",
+          "doc": "行数"
+        },
+        {
+          "field": "on_row_select",
+          "ctype": "ptr",
+          "prop": "kPlPropTable_OnRowSelect",
+          "set": "ptr",
+          "doc": "回调"
+        },
+        {
+          "field": "selected_row",
+          "ctype": "int",
+          "prop": "kPlPropTable_SelectedRow",
+          "set": "i",
+          "doc": "选中行"
+        }
+      ]
+    },
+    {
+      "type": "pl.SplitPane",
+      "doc": "可拖拽分割面板（左右或上下）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "split",
+          "ctype": "float",
+          "prop": "kPlPropSplitPane_Split",
+          "set": "f",
+          "doc": "比例 0-1"
+        },
+        {
+          "field": "vertical",
+          "ctype": "bool",
+          "prop": "kPlPropSplitPane_Vertical",
+          "set": "bool",
+          "doc": "左右分割"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSplitPane_OnChange",
+          "set": "ptr",
+          "doc": "回调"
+        },
+        {
+          "field": "first",
+          "ctype": "ptr",
+          "prop": "kPlPropSplitPane_First",
+          "set": "ptr",
+          "doc": "第一面板"
+        },
+        {
+          "field": "second",
+          "ctype": "ptr",
+          "prop": "kPlPropSplitPane_Second",
+          "set": "ptr",
+          "doc": "第二面板"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlPropSplitPane_Width",
+          "set": "f",
+          "doc": "总宽"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlPropSplitPane_Height",
+          "set": "f",
+          "doc": "总高"
+        }
+      ]
+    },
+    {
+      "type": "pl.Carousel",
+      "doc": "横向轮播组件（滑动切换）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "index",
+          "ctype": "int",
+          "prop": "kPlPropCarousel_Index",
+          "set": "i",
+          "doc": "当前项"
+        },
+        {
+          "field": "count",
+          "ctype": "int",
+          "prop": "kPlPropCarousel_Count",
+          "set": "i",
+          "doc": "总数"
+        },
+        {
+          "field": "builder",
+          "ctype": "ptr",
+          "prop": "kPlPropCarousel_Builder",
+          "set": "ptr",
+          "doc": "PlListBuilder"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropCarousel_OnChange",
+          "set": "ptr",
+          "doc": "切换回调"
+        },
+        {
+          "field": "width",
+          "ctype": "float",
+          "prop": "kPlPropCarousel_Width",
+          "set": "f",
+          "doc": "项宽 px"
+        },
+        {
+          "field": "height",
+          "ctype": "float",
+          "prop": "kPlPropCarousel_Height",
+          "set": "f",
+          "doc": "高度 px"
+        }
+      ]
+    },
+    {
+      "type": "pl.SearchBar",
+      "doc": "搜索栏（带图标和清除按钮的 Input 封装）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "value",
+          "ctype": "str",
+          "prop": "kPlPropSearchBar_Value",
+          "set": "str",
+          "doc": "当前文字"
+        },
+        {
+          "field": "placeholder",
+          "ctype": "str",
+          "prop": "kPlPropSearchBar_Placeholder",
+          "set": "str",
+          "doc": "提示文字"
+        },
+        {
+          "field": "on_change",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSearchBar_OnChange",
+          "set": "ptr",
+          "doc": "变更回调"
+        },
+        {
+          "field": "on_submit",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSearchBar_OnSubmit",
+          "set": "ptr",
+          "doc": "提交回调"
+        },
+        {
+          "field": "on_clear",
+          "ctype": "PlHandler",
+          "prop": "kPlPropSearchBar_OnClear",
+          "set": "ptr",
+          "doc": "清除回调"
+        }
+      ]
+    },
+    {
+      "type": "pl.Breadcrumb",
+      "doc": "面包屑导航（路径 > 链接）",
+      "kind": "composite",
+      "l1": [
+        {
+          "field": "items",
+          "ctype": "ptr",
+          "prop": "kPlPropBreadcrumb_Items",
+          "set": "ptr",
+          "doc": "const char**"
+        },
+        {
+          "field": "item_count",
+          "ctype": "int",
+          "prop": "kPlPropBreadcrumb_ItemCount",
+          "set": "i",
+          "doc": "数量"
+        },
+        {
+          "field": "on_click",
+          "ctype": "ptr",
+          "prop": "kPlPropBreadcrumb_OnClick",
+          "set": "ptr",
+          "doc": "点击回调"
+        }
+      ]
+    }
+  ],
+  "module_props": [
+    {
+      "widget": "pl.Image",
+      "name": "Src",
+      "ctype": "ptr",
+      "doc": "CevgImage*（图像源，宿主持有生命周期）"
+    },
+    {
+      "widget": "pl.Button",
+      "name": "OnPress",
+      "ctype": "ptr",
+      "doc": "PlHandler（按下动作）"
+    },
+    {
+      "widget": "pl.Text",
+      "name": "Ellipsis",
+      "ctype": "bool",
+      "doc": "放不下时尾部省略号截断"
+    },
+    {
+      "widget": "pl.Text",
+      "name": "Wrap",
+      "ctype": "bool",
+      "doc": "超宽时按词换行（多行）"
+    },
+    {
+      "widget": "pl.Scroll",
+      "name": "Y",
+      "ctype": "float",
+      "doc": "竖直滚动偏移（内容上移量）"
+    },
+    {
+      "widget": "pl.Divider",
+      "name": "Vertical",
+      "ctype": "bool",
+      "doc": "竖向分隔线（填高×厚），默认横向"
+    },
+    {
+      "widget": "pl.Scroll",
+      "name": "Bar",
+      "ctype": "bool",
+      "doc": "显示滚动条指示器（双轴：内容溢出哪轴显哪轴）"
+    },
+    {
+      "widget": "pl.Grid",
+      "name": "Cols",
+      "ctype": "int",
+      "doc": "列数（默认 2）"
+    },
+    {
+      "widget": "pl.Grid",
+      "name": "Auto",
+      "ctype": "int",
+      "doc": "列宽按内容自适应（默认 0=等宽）"
+    },
+    {
+      "widget": "pl.Grid",
+      "name": "MinW",
+      "ctype": "float",
+      "doc": "自适应时每列最小宽（默认 0）"
+    },
+    {
+      "widget": "pl.Grid",
+      "name": "MaxW",
+      "ctype": "float",
+      "doc": "自适应时每列最大宽（默认 0=不封顶）"
+    },
+    {
+      "widget": "pl.Grid",
+      "name": "MinH",
+      "ctype": "float",
+      "doc": "每行最小高（默认 0=不保底）"
+    },
+    {
+      "widget": "pl.Grid",
+      "name": "MaxH",
+      "ctype": "float",
+      "doc": "每行最大高（默认 0=不封顶）"
+    },
+    {
+      "widget": "pl.Scroll",
+      "name": "X",
+      "ctype": "float",
+      "doc": "水平滚动偏移（内容左移量）——尾部追加，2D 滚动用"
+    },
+    {
+      "widget": "pl.Input",
+      "name": "Value",
+      "ctype": "str",
+      "doc": "输入框当前值（受控）"
+    },
+    {
+      "widget": "pl.Input",
+      "name": "Placeholder",
+      "ctype": "str",
+      "doc": "无值时的占位提示文字"
+    },
+    {
+      "widget": "pl.Input",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：值变化时触发（新值通过 pl_event_text 读取）"
+    },
+    {
+      "widget": "pl.Input",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态：不可聚焦/不接受输入"
+    },
+    {
+      "widget": "pl.Input",
+      "name": "Password",
+      "ctype": "bool",
+      "doc": "密码模式：显示 • 替代字符"
+    },
+    {
+      "widget": "pl.Input",
+      "name": "OnSubmit",
+      "ctype": "ptr",
+      "doc": "PlHandler：按 Enter 时触发"
+    },
+    {
+      "widget": "pl.Checkbox",
+      "name": "Checked",
+      "ctype": "bool",
+      "doc": "勾选状态"
+    },
+    {
+      "widget": "pl.Checkbox",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：点击切换时触发"
+    },
+    {
+      "widget": "pl.Checkbox",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.Switch",
+      "name": "On",
+      "ctype": "bool",
+      "doc": "开关状态"
+    },
+    {
+      "widget": "pl.Switch",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：切换时触发"
+    },
+    {
+      "widget": "pl.Switch",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.Slider",
+      "name": "Value",
+      "ctype": "float",
+      "doc": "当前值（0.0–1.0）"
+    },
+    {
+      "widget": "pl.Slider",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：拖动时触发"
+    },
+    {
+      "widget": "pl.Slider",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.Select",
+      "name": "Value",
+      "ctype": "int",
+      "doc": "当前选中项索引（-1=未选）"
+    },
+    {
+      "widget": "pl.Select",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：选中项变化时触发"
+    },
+    {
+      "widget": "pl.Select",
+      "name": "Placeholder",
+      "ctype": "str",
+      "doc": "未选中时的提示文字"
+    },
+    {
+      "widget": "pl.Progress",
+      "name": "Value",
+      "ctype": "float",
+      "doc": "进度值 0.0–1.0；负值=不确定（旋转 spinner）"
+    },
+    {
+      "widget": "pl.Progress",
+      "name": "Thickness",
+      "ctype": "float",
+      "doc": "轨道粗细（默认 6）"
+    },
+    {
+      "widget": "pl.Modal",
+      "name": "Open",
+      "ctype": "bool",
+      "doc": "是否展示模态层"
+    },
+    {
+      "widget": "pl.Modal",
+      "name": "OnClose",
+      "ctype": "ptr",
+      "doc": "PlHandler：点击遮罩/Esc 时触发"
+    },
+    {
+      "widget": "pl.Modal",
+      "name": "Child",
+      "ctype": "PlNode",
+      "doc": "模态内容（自动居中）"
+    },
+    {
+      "widget": "pl.Tooltip",
+      "name": "Content",
+      "ctype": "str",
+      "doc": "提示文字"
+    },
+    {
+      "widget": "pl.Tooltip",
+      "name": "Child",
+      "ctype": "PlNode",
+      "doc": "触发元素（hover 后显示 tooltip）"
+    },
+    {
+      "widget": "pl.Tooltip",
+      "name": "Delay",
+      "ctype": "float",
+      "doc": "延迟显示时间秒（默认 0.3）"
+    },
+    {
+      "widget": "pl.Radio",
+      "name": "Checked",
+      "ctype": "bool",
+      "doc": "选中状态"
+    },
+    {
+      "widget": "pl.Radio",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：点击时触发（pl_event_text='1'）"
+    },
+    {
+      "widget": "pl.Radio",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.Badge",
+      "name": "Count",
+      "ctype": "int",
+      "doc": "徽章数字（0=隐藏，>99 显示 99+）"
+    },
+    {
+      "widget": "pl.Badge",
+      "name": "Content",
+      "ctype": "str",
+      "doc": "徽章文字（优先于 Count）；NULL=用 Count"
+    },
+    {
+      "widget": "pl.Badge",
+      "name": "Color",
+      "ctype": "PlColor",
+      "doc": "0=默认红色"
+    },
+    {
+      "widget": "pl.Chip",
+      "name": "Label",
+      "ctype": "str",
+      "doc": "标签文字"
+    },
+    {
+      "widget": "pl.Chip",
+      "name": "Selected",
+      "ctype": "bool",
+      "doc": "选中态（高亮背景）"
+    },
+    {
+      "widget": "pl.Chip",
+      "name": "OnTap",
+      "ctype": "ptr",
+      "doc": "PlHandler：点击回调"
+    },
+    {
+      "widget": "pl.Chip",
+      "name": "OnRemove",
+      "ctype": "ptr",
+      "doc": "PlHandler：删除按钮回调（NULL=不显示 ×）"
+    },
+    {
+      "widget": "pl.Chip",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.Accordion",
+      "name": "Title",
+      "ctype": "str",
+      "doc": "标题文字"
+    },
+    {
+      "widget": "pl.Accordion",
+      "name": "Open",
+      "ctype": "bool",
+      "doc": "展开状态"
+    },
+    {
+      "widget": "pl.Accordion",
+      "name": "OnToggle",
+      "ctype": "ptr",
+      "doc": "PlHandler：点击标题时触发"
+    },
+    {
+      "widget": "pl.Accordion",
+      "name": "Child",
+      "ctype": "PlNode",
+      "doc": "折叠内容"
+    },
+    {
+      "widget": "pl.Select",
+      "name": "Options",
+      "ctype": "ptr",
+      "doc": "const char** 选项数组（以 NULL 结尾）"
+    },
+    {
+      "widget": "pl.Select",
+      "name": "OptionCount",
+      "ctype": "int",
+      "doc": "选项数量（与 Options 配合使用）"
+    },
+    {
+      "widget": "pl.Select",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.Badge",
+      "name": "ChildNode",
+      "ctype": "ptr",
+      "doc": "内部：子节点 PlNode ptr"
+    },
+    {
+      "widget": "pl.Accordion",
+      "name": "ChildNode",
+      "ctype": "ptr",
+      "doc": "内部：子节点 PlNode ptr"
+    },
+    {
+      "widget": "pl.Tooltip",
+      "name": "ChildNode",
+      "ctype": "ptr",
+      "doc": "内部：触发节点 PlNode ptr"
+    },
+    {
+      "widget": "pl.Tabs",
+      "name": "ActiveIndex",
+      "ctype": "int",
+      "doc": "当前激活 Tab 索引（0 起）"
+    },
+    {
+      "widget": "pl.Tabs",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler：切换时触发；pl_event_text='N'"
+    },
+    {
+      "widget": "pl.Tabs",
+      "name": "Labels",
+      "ctype": "ptr",
+      "doc": "const char** 标签数组（NULL 结尾 or 配合 Count）"
+    },
+    {
+      "widget": "pl.Tabs",
+      "name": "Count",
+      "ctype": "int",
+      "doc": "标签数量"
+    },
+    {
+      "widget": "pl.Avatar",
+      "name": "Initials",
+      "ctype": "str",
+      "doc": "首字母缩写（1-2字符，图片不可用时显示）"
+    },
+    {
+      "widget": "pl.Avatar",
+      "name": "Color",
+      "ctype": "PlColor",
+      "doc": "背景色（0=按 initials hash 自动选）"
+    },
+    {
+      "widget": "pl.Avatar",
+      "name": "Size",
+      "ctype": "float",
+      "doc": "直径 px（默认 40）"
+    },
+    {
+      "widget": "pl.Avatar",
+      "name": "Src",
+      "ctype": "ptr",
+      "doc": "CevgImage* 图片源（NULL=仅显示首字母）"
+    },
+    {
+      "widget": "pl.List",
+      "name": "Count",
+      "ctype": "int",
+      "doc": "列表项总数"
+    },
+    {
+      "widget": "pl.List",
+      "name": "ItemHeight",
+      "ctype": "float",
+      "doc": "每项等高 px（默认 48）"
+    },
+    {
+      "widget": "pl.List",
+      "name": "Builder",
+      "ctype": "ptr",
+      "doc": "PlListBuilder：(ctx,idx)→PlNode 构建每项"
+    },
+    {
+      "widget": "pl.List",
+      "name": "ScrollY",
+      "ctype": "float",
+      "doc": "当前滚动偏移（受控）"
+    },
+    {
+      "widget": "pl.List",
+      "name": "OnScroll",
+      "ctype": "ptr",
+      "doc": "PlHandler：滚动时触发"
+    },
+    {
+      "widget": "pl.List",
+      "name": "Height",
+      "ctype": "float",
+      "doc": "视口高度 px"
+    },
+    {
+      "widget": "pl.List",
+      "name": "Width",
+      "ctype": "float",
+      "doc": "视口宽度 px"
+    },
+    {
+      "widget": "pl.Notification",
+      "name": "Message",
+      "ctype": "str",
+      "doc": "通知文字"
+    },
+    {
+      "widget": "pl.Notification",
+      "name": "Duration",
+      "ctype": "float",
+      "doc": "显示时长秒（默认 3.0，0=不自动消失）"
+    },
+    {
+      "widget": "pl.Notification",
+      "name": "Variant",
+      "ctype": "int",
+      "doc": "kPlNotify_Info=0/Success=1/Warning=2/Error=3"
+    },
+    {
+      "widget": "pl.Notification",
+      "name": "OnClose",
+      "ctype": "ptr",
+      "doc": "PlHandler：消失时触发"
+    },
+    {
+      "widget": "pl.Notification",
+      "name": "Visible",
+      "ctype": "bool",
+      "doc": "是否显示（受控）"
+    },
+    {
+      "widget": "pl.RichText",
+      "name": "Spans",
+      "ctype": "ptr",
+      "doc": "PlSpan* 数组（指向 PlSpan[]）"
+    },
+    {
+      "widget": "pl.RichText",
+      "name": "SpanCount",
+      "ctype": "int",
+      "doc": "Span 数量"
+    },
+    {
+      "widget": "pl.RichText",
+      "name": "Wrap",
+      "ctype": "bool",
+      "doc": "换行"
+    },
+    {
+      "widget": "pl.Scroll",
+      "name": "BarTrack",
+      "ctype": "PlColor",
+      "doc": "滚动条轨道色（0=默认灰）"
+    },
+    {
+      "widget": "pl.Scroll",
+      "name": "BarThumb",
+      "ctype": "PlColor",
+      "doc": "滚动条滑块色（0=默认蓝灰）"
+    },
+    {
+      "widget": "pl.Menu",
+      "name": "Open",
+      "ctype": "bool",
+      "doc": "是否展开"
+    },
+    {
+      "widget": "pl.Menu",
+      "name": "Items",
+      "ctype": "ptr",
+      "doc": "PlMenuItem* 数组"
+    },
+    {
+      "widget": "pl.Menu",
+      "name": "ItemCount",
+      "ctype": "int",
+      "doc": "菜单项数"
+    },
+    {
+      "widget": "pl.Menu",
+      "name": "OnSelect",
+      "ctype": "ptr",
+      "doc": "PlHandler：选中项时触发；pl_event_text=item id"
+    },
+    {
+      "widget": "pl.Menu",
+      "name": "X",
+      "ctype": "float",
+      "doc": "菜单弹出 x 坐标"
+    },
+    {
+      "widget": "pl.Menu",
+      "name": "Y",
+      "ctype": "float",
+      "doc": "菜单弹出 y 坐标"
+    },
+    {
+      "widget": "pl.Pagination",
+      "name": "Page",
+      "ctype": "int",
+      "doc": "当前页（1 起）"
+    },
+    {
+      "widget": "pl.Pagination",
+      "name": "PageCount",
+      "ctype": "int",
+      "doc": "总页数"
+    },
+    {
+      "widget": "pl.Pagination",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='N'"
+    },
+    {
+      "widget": "pl.ColorPicker",
+      "name": "Value",
+      "ctype": "PlColor",
+      "doc": "当前颜色 0xRRGGBBAA"
+    },
+    {
+      "widget": "pl.ColorPicker",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='RRGGBBAA'"
+    },
+    {
+      "widget": "pl.DatePicker",
+      "name": "Year",
+      "ctype": "int",
+      "doc": "年"
+    },
+    {
+      "widget": "pl.DatePicker",
+      "name": "Month",
+      "ctype": "int",
+      "doc": "月（1-12）"
+    },
+    {
+      "widget": "pl.DatePicker",
+      "name": "Day",
+      "ctype": "int",
+      "doc": "日（1-31）"
+    },
+    {
+      "widget": "pl.DatePicker",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='YYYY-MM-DD'"
+    },
+    {
+      "widget": "pl.Stepper",
+      "name": "Value",
+      "ctype": "int",
+      "doc": "当前值"
+    },
+    {
+      "widget": "pl.Stepper",
+      "name": "Min",
+      "ctype": "int",
+      "doc": "最小值（默认 0）"
+    },
+    {
+      "widget": "pl.Stepper",
+      "name": "Max",
+      "ctype": "int",
+      "doc": "最大值（默认 99）"
+    },
+    {
+      "widget": "pl.Stepper",
+      "name": "Step",
+      "ctype": "int",
+      "doc": "步进量（默认 1）"
+    },
+    {
+      "widget": "pl.Stepper",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='N'"
+    },
+    {
+      "widget": "pl.Stepper",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用"
+    },
+    {
+      "widget": "pl.Rating",
+      "name": "Value",
+      "ctype": "int",
+      "doc": "当前评分（0-5）"
+    },
+    {
+      "widget": "pl.Rating",
+      "name": "Max",
+      "ctype": "int",
+      "doc": "最大星数（默认 5）"
+    },
+    {
+      "widget": "pl.Rating",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='N'"
+    },
+    {
+      "widget": "pl.Rating",
+      "name": "ReadOnly",
+      "ctype": "bool",
+      "doc": "只读"
+    },
+    {
+      "widget": "pl.Timeline",
+      "name": "Items",
+      "ctype": "ptr",
+      "doc": "PlTimelineItem* 数组"
+    },
+    {
+      "widget": "pl.Timeline",
+      "name": "ItemCount",
+      "ctype": "int",
+      "doc": "数量"
+    },
+    {
+      "widget": "pl.Text",
+      "name": "LineHeight",
+      "ctype": "float",
+      "doc": "行高比例（默认 1.2）"
+    },
+    {
+      "widget": "pl.Text",
+      "name": "LetterSpacing",
+      "ctype": "float",
+      "doc": "字间距 px（默认 0）"
+    },
+    {
+      "widget": "pl.Box",
+      "name": "RadiusTL",
+      "ctype": "float",
+      "doc": "左上圆角（0=跟 Radius）"
+    },
+    {
+      "widget": "pl.Box",
+      "name": "RadiusTR",
+      "ctype": "float",
+      "doc": "右上圆角"
+    },
+    {
+      "widget": "pl.Box",
+      "name": "RadiusBR",
+      "ctype": "float",
+      "doc": "右下圆角"
+    },
+    {
+      "widget": "pl.Box",
+      "name": "RadiusBL",
+      "ctype": "float",
+      "doc": "左下圆角"
+    },
+    {
+      "widget": "pl.Table",
+      "name": "Columns",
+      "ctype": "ptr",
+      "doc": "PlTableColumn* 列定义数组"
+    },
+    {
+      "widget": "pl.Table",
+      "name": "ColumnCount",
+      "ctype": "int",
+      "doc": "列数"
+    },
+    {
+      "widget": "pl.Table",
+      "name": "Rows",
+      "ctype": "ptr",
+      "doc": "const char** 数据（rows×cols 行主序）"
+    },
+    {
+      "widget": "pl.Table",
+      "name": "RowCount",
+      "ctype": "int",
+      "doc": "行数（不含表头）"
+    },
+    {
+      "widget": "pl.Table",
+      "name": "OnRowSelect",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='row_idx'"
+    },
+    {
+      "widget": "pl.Table",
+      "name": "SelectedRow",
+      "ctype": "int",
+      "doc": "选中行索引（-1=无）"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "Split",
+      "ctype": "float",
+      "doc": "分割比例 0.0-1.0（默认 0.5）"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "Vertical",
+      "ctype": "bool",
+      "doc": "true=左右分割，false=上下分割"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='0.000'"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "First",
+      "ctype": "ptr",
+      "doc": "PlNode：第一个面板"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "Second",
+      "ctype": "ptr",
+      "doc": "PlNode：第二个面板"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "Width",
+      "ctype": "float",
+      "doc": "总宽度 px（vertical=true 时）"
+    },
+    {
+      "widget": "pl.SplitPane",
+      "name": "Height",
+      "ctype": "float",
+      "doc": "总高度 px"
+    },
+    {
+      "widget": "pl.Carousel",
+      "name": "Index",
+      "ctype": "int",
+      "doc": "当前显示项索引（0 起）"
+    },
+    {
+      "widget": "pl.Carousel",
+      "name": "Count",
+      "ctype": "int",
+      "doc": "总项数"
+    },
+    {
+      "widget": "pl.Carousel",
+      "name": "Builder",
+      "ctype": "ptr",
+      "doc": "PlListBuilder：(ctx,idx)→PlNode"
+    },
+    {
+      "widget": "pl.Carousel",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='N'"
+    },
+    {
+      "widget": "pl.Carousel",
+      "name": "Width",
+      "ctype": "float",
+      "doc": "每项宽 px（默认 300）"
+    },
+    {
+      "widget": "pl.Carousel",
+      "name": "Height",
+      "ctype": "float",
+      "doc": "高度 px（默认 200）"
+    },
+    {
+      "widget": "pl.SearchBar",
+      "name": "Value",
+      "ctype": "str",
+      "doc": "搜索框当前文字"
+    },
+    {
+      "widget": "pl.SearchBar",
+      "name": "Placeholder",
+      "ctype": "str",
+      "doc": "提示文字（默认 'Search...'）"
+    },
+    {
+      "widget": "pl.SearchBar",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text=new value"
+    },
+    {
+      "widget": "pl.SearchBar",
+      "name": "OnSubmit",
+      "ctype": "ptr",
+      "doc": "PlHandler；回车确认"
+    },
+    {
+      "widget": "pl.SearchBar",
+      "name": "OnClear",
+      "ctype": "ptr",
+      "doc": "PlHandler；清除按钮"
+    },
+    {
+      "widget": "pl.Breadcrumb",
+      "name": "Items",
+      "ctype": "ptr",
+      "doc": "const char** 路径项数组（NULL 结尾）"
+    },
+    {
+      "widget": "pl.Breadcrumb",
+      "name": "ItemCount",
+      "ctype": "int",
+      "doc": "路径项数"
+    },
+    {
+      "widget": "pl.Breadcrumb",
+      "name": "OnClick",
+      "ctype": "ptr",
+      "doc": "PlHandler；pl_event_text='idx'"
+    },
+    {
+      "widget": "pl.Image",
+      "name": "Fit",
+      "ctype": "int",
+      "doc": "0=fill 1=contain 2=cover"
+    },
+    {
+      "widget": "pl.Button",
+      "name": "IconLeft",
+      "ctype": "PlNode",
+      "doc": "左侧图标节点"
+    },
+    {
+      "widget": "pl.Button",
+      "name": "IconRight",
+      "ctype": "PlNode",
+      "doc": "右侧图标节点"
+    },
+    {
+      "widget": "pl.Button",
+      "name": "Loading",
+      "ctype": "bool",
+      "doc": "加载态（旋转 spinner）"
+    },
+    {
+      "widget": "pl.Text",
+      "name": "Dir",
+      "ctype": "int",
+      "doc": "文本方向 kPlDir_Auto/LTR/RTL"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Value",
+      "ctype": "str",
+      "doc": "当前值（受控，可含换行）"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Placeholder",
+      "ctype": "str",
+      "doc": "占位文字"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "OnChange",
+      "ctype": "ptr",
+      "doc": "PlHandler 值变化回调"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Rows",
+      "ctype": "int",
+      "doc": "可见行数"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Dir",
+      "ctype": "int",
+      "doc": "文本方向"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Disabled",
+      "ctype": "bool",
+      "doc": "禁用态"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Cursor",
+      "ctype": "int",
+      "doc": "内部：光标字节偏移（传给视图）"
+    },
+    {
+      "widget": "pl.TextArea",
+      "name": "Anchor",
+      "ctype": "int",
+      "doc": "内部：选区锚点字节偏移（传给视图）"
+    },
+    {
+      "widget": "pl.Text",
+      "name": "InkCenter",
+      "ctype": "bool",
+      "doc": "按墨迹盒垂直居中（补偿 CJK 字形上下偏移）"
+    }
+  ]
+}
